@@ -1,0 +1,10 @@
+^C:\USERS\MUNYON\DOCUMENTS\COURS UEMF\EIDIA\CPI 2ÈME ANNÉE\LANGAGE C++\PROJET C++\ECOVILLAGE\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SC:/Users/MUNYON/Documents/Cours UEMF/EIDIA/CPI 2ème année/Langage C++/Projet C++/Ecovillage" "-BC:/Users/MUNYON/Documents/Cours UEMF/EIDIA/CPI 2ème année/Langage C++/Projet C++/Ecovillage/build" --check-stamp-file "C:/Users/MUNYON/Documents/Cours UEMF/EIDIA/CPI 2ème année/Langage C++/Projet C++/Ecovillage/build/CMakeFiles/generate.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

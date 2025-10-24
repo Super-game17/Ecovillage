@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\MUNYON\Documents\Cours UEMF\EIDIA\CPI 2ème année\Langage C++\Projet C++\Ecovillage\build\CMakeFiles\fed886c918e3a6674c802b00af48caf5\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{00322981-57D7-3AB1-8AA5-1D13D1DB88FF}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
