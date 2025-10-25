@@ -1,0 +1,20 @@
+# Build directory
+/build/
+/build/**
+
+# CMake generated
+CMakeCache.txt
+CMakeFiles/
+*.cmake
+*.vcxproj
+*.vcxproj.filters
+*.sln
+
+# Binaries
+*.exe
+*.dll
+*.lib
+*.pdb
+
+# VS Code CMake Tools
+.vscode/.cmake/

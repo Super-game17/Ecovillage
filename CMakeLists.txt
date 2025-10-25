@@ -16,11 +16,21 @@ add_executable(ecovillage
     src/main.cpp
 )
 
+# exemple: un autre exécutable pour tester un fichier séparé
+add_executable(test_file
+    tests/test_file.cpp
+)
+
 # Link the imported SFML targets and json (noms exacts)
 target_link_libraries(ecovillage PRIVATE
     SFML::System
     SFML::Window
     SFML::Graphics
     SFML::Audio
+    nlohmann_json::nlohmann_json
+)
+
+target_link_libraries(test_file PRIVATE
+    SFML::System SFML::Window SFML::Graphics SFML::Audio
     nlohmann_json::nlohmann_json
 )
