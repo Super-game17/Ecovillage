@@ -19,6 +19,11 @@ add_executable(ecovillage
 # exemple: un autre exécutable pour tester un fichier séparé
 add_executable(test_file
     tests/test_file.cpp
+    src/core/Grille_iso.cpp
+)
+
+target_include_directories(test_file PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
 )
 
 # Link the imported SFML targets and json (noms exacts)
