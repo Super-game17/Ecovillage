@@ -7,10 +7,6 @@ void afficher_grille_iso(sf::RenderWindow& window,unsigned int width, unsigned i
     const float tileW = 100.f; // largeur du losange (px)
     const float tileH = 50.f; // hauteur du losange (px) (souvent tileH = tileW / 2)
 
-    // Origine écran (où la case (0,0) sera dessinée)
-    const float originX = width / 2.f;
-    const float originY = height / 4.f;
-
     // Préparer la forme losange (top tile)
     sf::ConvexShape diamond;
     diamond.setPointCount(4);
@@ -25,10 +21,7 @@ void afficher_grille_iso(sf::RenderWindow& window,unsigned int width, unsigned i
     for (int y = 0; y < mapH; ++y) {
             for (int x = 0; x < mapW; ++x) {
                 // Formule de projection isometrique (top view)
-                float screenX = originX + (x - y) * (tileW / 2.f);
-                float screenY = originY + (x + y) * (tileH / 2.f);
-
-                diamond.setPosition({screenX, screenY});
+                diamond.setPosition(isoToScreen(x, y, 0, tileW, tileH, width, height));
                 
                 window.draw(diamond);
 
@@ -37,4 +30,16 @@ void afficher_grille_iso(sf::RenderWindow& window,unsigned int width, unsigned i
             }
         }
 
+}
+
+float wave(float amplitude, float frequency, float phase, sf::Clock& clock, int x, int y){
+    float t = clock.getElapsedTime().asSeconds();
+    return amplitude * sinf(frequency * t + phase + ( x+y )* phase);
+}
+
+sf::Vector2f isoToScreen(int x, int y, int z, int tileWidth, int tileHeight, unsigned int width, unsigned int height) {
+    float screenX = (width / 2.f) + (x - y) * (tileWidth / 2.f);
+    // On retire la hauteur 'z' à la position y pour faire monter l'objet
+    float screenY = (height / 4.f) + (x + y) * (tileHeight / 2.f) - z * tileHeight; 
+    return sf::Vector2f(screenX, screenY);
 }

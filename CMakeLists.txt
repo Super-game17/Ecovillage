@@ -20,6 +20,7 @@ add_executable(ecovillage
 add_executable(test_file
     tests/test_file.cpp
     src/core/Grille_iso.cpp
+    src/core/map.cpp
 )
 
 target_include_directories(test_file PUBLIC
