@@ -15,10 +15,18 @@ find_package(nlohmann_json REQUIRED)
 add_executable(ecovillage
     src/main.cpp
 )
+add_executable(outrun
+    Outrun/main.cpp
+)
 
 # exemple: un autre exécutable pour tester un fichier séparé
 add_executable(test_file
     tests/test_file.cpp
+    src/core/Grille_iso.cpp
+)
+
+target_include_directories(test_file PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
 )
 
 # Link the imported SFML targets and json (noms exacts)
@@ -32,5 +40,13 @@ target_link_libraries(ecovillage PRIVATE
 
 target_link_libraries(test_file PRIVATE
     SFML::System SFML::Window SFML::Graphics SFML::Audio
+    nlohmann_json::nlohmann_json
+)
+
+target_link_libraries(outrun PRIVATE
+    SFML::System
+    SFML::Window
+    SFML::Graphics
+    SFML::Audio
     nlohmann_json::nlohmann_json
 )
