@@ -18,13 +18,6 @@
             "program": "${workspaceFolder}/build/Debug/ecovillage.exe",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "cmake-build",
-            "environment": [
-                {
-                    "name": "PATH",
-                    "value": "${workspaceFolder}\\vcpkg\\installed\\x64-windows\\bin;${env:PATH}"
-                }
-            ],
             "console": "integratedTerminal"
         },
         {
@@ -33,11 +26,8 @@
             "request": "launch",
             "program": "${workspaceFolder}/build/Debug/test_file.exe",
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "cmake-build",
-            "environment": [
-                { "name": "PATH", "value": "${workspaceFolder}\\vcpkg\\installed\\x64-windows\\bin;${env:PATH}" }
-            ],
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "preLaunchTask": "Cmake build test"
         }
     ]
 }
