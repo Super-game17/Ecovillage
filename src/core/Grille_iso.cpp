@@ -43,3 +43,19 @@ sf::Vector2f isoToScreen(int x, int y, int z, int tileWidth, int tileHeight, uns
     float screenY = (height / 4.f) + (x + y) * (tileHeight / 2.f) - z * tileHeight; 
     return sf::Vector2f(screenX, screenY);
 }
+
+sf::Vector2i isoToCartesian (int worldX, int worldY, int tileWidth, int tileHeight){
+    // worldX/worldY doivent être des coords MONDE (après retrait de chunkOrigin)
+    float halfW = tileWidth / 2.0f;
+    float halfH = tileHeight / 2.0f;
+
+    float eq1 = worldX / halfW; // x - y
+    float eq2 = worldY / halfH; // x + y
+
+    float fx = (eq1 + eq2) / 2.0f;
+    float fy = (eq2 - eq1) / 2.0f;
+
+    int ix = static_cast<int>(std::floor(fx + 0.00001f));
+    int iy = static_cast<int>(std::floor(fy + 0.00001f));
+    return sf::Vector2i(ix, iy);
+}
