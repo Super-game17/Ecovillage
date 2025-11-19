@@ -1,4 +1,8 @@
-#include "Grille_iso.hpp"
+#include "utilitaires.hpp"
+
+// Define the global variables
+unsigned int swidth = 1280;
+unsigned int sheight = 720;
 
 void afficher_grille_iso(sf::RenderWindow& window,unsigned int width, unsigned int height) {
     // Paramètres de la grille
@@ -58,4 +62,19 @@ sf::Vector2i isoToCartesian (int worldX, int worldY, int tileWidth, int tileHeig
     int ix = static_cast<int>(std::floor(fx + 0.00001f));
     int iy = static_cast<int>(std::floor(fy + 0.00001f));
     return sf::Vector2i(ix, iy);
+}
+// Petit helper pour avoir un nombre aléatoire stable basé sur la position
+// Retourne entre 0.0 et 1.0
+float randomHash(int x, int y) {
+    // 1. On convertit les coordonnées en unsigned pour "casser" le signe
+    // Le 'u' force le compilateur à traiter ces grands nombres comme non-signés
+    unsigned int seed = (unsigned int)x * 15485863u + (unsigned int)y * 2038074743u; 
+    
+    // 2. On mélange les bits (XOR et décalages)
+    seed = (seed ^ (seed >> 13)) * 1274126177u;
+    seed = seed ^ (seed >> 16);
+
+    // 3. On ramène le résultat entre 0.0 et 1.0
+    // Le modulo 10000 donne un entier entre 0 et 9999
+    return (float)(seed % 10000) / 10000.0f;
 }

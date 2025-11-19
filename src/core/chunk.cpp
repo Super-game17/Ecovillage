@@ -1,4 +1,5 @@
 #include "chunk.hpp"
+#include "map.hpp"
 
 
 void Chunk::addTile(float worldX, float worldY, int zLevel, const sf::Color& color) {
@@ -9,11 +10,7 @@ void Chunk::addTile(float worldX, float worldY, int zLevel, const sf::Color& col
     float heightPerZLevel = tileHeight; // Hauteur visuelle d'un bloc Z
 
     // Position isométrique
-    float isoX = (worldX - worldY) * halfTileW;
-    
-    float baseIsoY = (worldX + worldY) * tileHeight / 2.f;
-    float zOffset = zLevel * heightPerZLevel;
-    float isoY = baseIsoY - zOffset;
+    auto [isoX, isoY] = isoToScreen(worldX, worldY, zLevel, tileWidth, tileHeight, swidth, sheight);
 
     sf::Vector2f tilePos(isoX, isoY);
 
@@ -36,28 +33,13 @@ void Chunk::addTile(float worldX, float worldY, int zLevel, const sf::Color& col
 
     for (int i = 0; i < 6; i++) vertices.push_back(v[i]);
 }
-// Petit helper pour avoir un nombre aléatoire stable basé sur la position
-// Retourne entre 0.0 et 1.0
-float Chunk::randomHash(int x, int y) {
-    // 1. On convertit les coordonnées en unsigned pour "casser" le signe
-    // Le 'u' force le compilateur à traiter ces grands nombres comme non-signés
-    unsigned int seed = (unsigned int)x * 15485863u + (unsigned int)y * 2038074743u; 
-    
-    // 2. On mélange les bits (XOR et décalages)
-    seed = (seed ^ (seed >> 13)) * 1274126177u;
-    seed = seed ^ (seed >> 16);
-
-    // 3. On ramène le résultat entre 0.0 et 1.0
-    // Le modulo 10000 donne un entier entre 0 et 9999
-    return (float)(seed % 10000) / 10000.0f;
-}
 
 void Chunk::generateTree(int rootX, int rootY, int zGroundLevel) {
     // 1. Paramètres de base (couleurs fixes pour l'instant)
     sf::Color trunkColor(101, 67, 33);   // Marron
     sf::Color leavesColor(0, 100, 0);  // Vert foncé
 
-    // Utilisation du hash pour déterminer le type d'arbre (déterministe)
+    // Utilisation du hash de l'utilitaire pour déterminer le type d'arbre (déterministe)
     float rType = randomHash(rootX + 1000, rootY + 1000); // Décalage pour varier les résultats
     
     bool bigTree = (rType < 0.1f); // 10% de chance pour un grand arbre
@@ -99,57 +81,20 @@ void Chunk::generateTree(int rootX, int rootY, int zGroundLevel) {
     }
 }
 
-Chunk::Chunk(int cx, int cy, int tileW, int tileH, const sf::Texture& texture)
+Chunk::Chunk(int cx, int cy, int tileW, int tileH, Map& carte)
         : chunkX(cx), chunkY(cy) {
-            // 1. Initialiser le générateur de bruit
-        //    (Fais-le une fois au début du constructeur)
-        FastNoiseLite noise;
-        noise.SetNoiseType(FastNoiseLite::NoiseType_Perlin);
-        noise.SetFrequency(0.008f); // TRÈS IMPORTANT: joue avec cette valeur !
-                                   // Plus elle est petite, plus le terrain est "zoomé"
 
-        // 2. Ajoute des octaves pour plus de détails (comme Minecraft)
-        noise.SetFractalType(FastNoiseLite::FractalType_FBm);
-        noise.SetFractalOctaves(6); // Comme dans ton exemple (6 octaves)
-        noise.SetFractalLacunarity(2.0f);
-        noise.SetFractalGain(0.45f); // Comme dans ton exemple
-
-        // C'est la hauteur en pixels de "un" niveau de Z.
-        // Puisque vos tuiles (X=0,Y=0) et (X=0,Y=1) sont décalées de 
-        // halfTileH (25px), c'est la hauteur logique pour un cube.
-        const float heightPerZLevel = tileH; // Ex: 25.0f
-
-
-        vertices.reserve(SIZE * SIZE * 6 * 2); // 6 vertices par tile (2 triangles)
+        vertices.reserve(SIZE * SIZE * 6 * 2); // 6 vertices par tile (2 triangles) * 2 (pour les arbres potentiels)
     
         int baseX = cx * SIZE;
         int baseY = cy * SIZE;
-        
-        float halfTileW = tileW / 2.0f;
-        float tileHeightFull = tileH * 2.0f;
-        
-        sf::Vector2u texSize = texture.getSize();
         
         for (int y = 0; y < SIZE; ++y) {
             for (int x = 0; x < SIZE; ++x) {
                 int worldX = baseX + x;
                 int worldY = baseY + y;
-
-                // 2. Obtenir la valeur du bruit pour cette coordonnée
-                //    On utilise les coordonnées MONDE (worldX, worldY)
-                //    GetNoise() renvoie une valeur entre -1.0 et 1.0
-                float noiseValue = noise.GetNoise((float)worldX, (float)worldY);
-                float noise01 = (noiseValue + 1.0f) * 0.5f; // Convertir [-1,1] en [0,1]
-
-                // 4. Élévation exponentielle (comme dans ton exemple avec pow)
-                noise01 = std::pow(noise01, 3.5f); // Augmente le contraste
-                // Convertir le bruit en niveaux de hauteur entiers (ex: 0 à 10)
-                // (noiseValue + 1.0) -> [0, 2]
-                // * 5.0 -> [0, 10]
-                // 5. Calculer la hauteur finale
-                int zLevel = static_cast<int>(noise01 * 80.0f); // 0 à 80 blocs
-
                 
+                int zLevel = carte.getGroundLevel(static_cast<float>(worldX), static_cast<float>(worldY));
                 // --- NOUVEAU : Couleur basée sur la hauteur ---
                 sf::Color color;
                 bool canHaveTree = false;

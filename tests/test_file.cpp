@@ -1,15 +1,12 @@
 #include<iostream>
 #include<SFML/Graphics.hpp>
-#include"Grille_iso.hpp"
 #include"camera.hpp"
-#include "FastNoiseLite.h"
 #include "map.hpp"
-
+#include"utilitaires.hpp"
 int main(){
-    unsigned int width = 1280;
-    unsigned int height = 720;
-    Camera camera(static_cast<float>(width), static_cast<float>(height), sf::Vector2f(width/2.f, height/2.f));
-    sf::RenderWindow window(sf::VideoMode({width, height}), "Chunk System");
+
+    Camera camera(static_cast<float>(swidth), static_cast<float>(sheight), sf::Vector2f(swidth/2.f, sheight/2.f));
+    sf::RenderWindow window(sf::VideoMode({swidth, sheight}), "Chunk System");
     Map Carte;
     sf::Texture texture;
     if(!texture.loadFromFile("assets/sprites/block.png")){
@@ -48,7 +45,7 @@ int main(){
         
         // Dessiner tous les chunks visibles
         Carte.render(window, texture);
-
+        afficher_grille_iso(window,swidth,sheight);
         window.display();
     }
     

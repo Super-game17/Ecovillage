@@ -2,13 +2,12 @@
 #define CHUNK_HPP
 #include "SFML/Graphics.hpp"
 #include "FastNoiseLite.h"
-#include "Grille_iso.hpp"
+#include "utilitaires.hpp"
 #include<map>
 #include <iostream>
 
-const int tileWidth = 100;
-const int tileHeight = 50;
 
+class Map; // Déclaration anticipée
 // Structure pour représenter les coordonnées d'un chunk par rapport à la grille de chunks
 struct ChunkCoord {
     int x, y;
@@ -22,7 +21,8 @@ struct ChunkCoord {
 };
 
 // Structure de Chunk
-struct Chunk {
+class Chunk {
+public:
     static constexpr int SIZE = 16;
     std::vector<sf::Vertex> vertices;
     sf::VertexBuffer vertexBuffer;
@@ -31,16 +31,13 @@ struct Chunk {
 
     Chunk() = default;
 
-    Chunk(int cx, int cy, int tileW, int tileH, const sf::Texture& texture) ;
+    Chunk(int cx, int cy, int tileW, int tileH, Map& carte) ;
 
     // Helper pour ajouter un "cube/tuile" visuel au vecteur de vertices
     void addTile(float worldX, float worldY, int zLevel, const sf::Color& color);
 
     // Helper pour générer un arbre à une position donnée
     void generateTree(int worldX, int worldY, int zGroundLevel);
-
-    // Fonction pseudo-aléatoire pour décider si on plante un arbre (stable)
-    float randomHash(int x, int y);
 
     void draw(sf::RenderTarget& target, sf::RenderStates states) const;
 };

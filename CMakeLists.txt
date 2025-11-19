@@ -19,7 +19,7 @@ add_executable(ecovillage
 # exemple: un autre exécutable pour tester un fichier séparé
 add_executable(test_file
     tests/test_file.cpp
-    src/core/Grille_iso.cpp
+    src/core/utilitaires.cpp
     src/core/chunk.cpp
     src/core/map.cpp
 )

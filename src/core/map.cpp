@@ -1,5 +1,37 @@
 #include "map.hpp"
 
+void Map::initNoise(){
+        noise.SetNoiseType(FastNoiseLite::NoiseType_Perlin);
+        noise.SetFrequency(0.008f); // TRÈS IMPORTANT: joue avec cette valeur !
+                                   // Plus elle est petite, plus le terrain est "zoomé"
+        // 2. Ajoute des octaves pour plus de détails (comme Minecraft)
+        noise.SetFractalType(FastNoiseLite::FractalType_FBm);
+        noise.SetFractalOctaves(6); // Comme dans ton exemple (6 octaves)
+        noise.SetFractalLacunarity(2.0f);
+        noise.SetFractalGain(0.45f); // Comme dans ton exemple
+
+}
+
+int Map::getGroundLevel(float worldX, float worldY) const{
+
+    // 2. Obtenir la valeur du bruit pour cette coordonnée
+    //    On utilise les coordonnées MONDE (worldX, worldY)
+    //    GetNoise() renvoie une valeur entre -1.0 et 1.0
+    float noiseValue = noise.GetNoise((float)worldX, (float)worldY);
+    float noise01 = (noiseValue + 1.0f) * 0.5f; // Convertir [-1,1] en [0,1]
+
+    // 4. Élévation exponentielle (comme dans ton exemple avec pow)
+    noise01 = std::pow(noise01, 3.5f); // Augmente le contraste
+    // Convertir le bruit en niveaux de hauteur entiers (ex: 0 à 10)
+    // (noiseValue + 1.0) -> [0, 2]
+    // * 5.0 -> [0, 10]
+    // 5. Calculer la hauteur finale
+    int zLevel = static_cast<int>(noise01 * 80.0f); // 0 à 80 blocs
+
+    return zLevel;
+
+}
+
 void Map::update (const sf::Vector2f& cameraPos, const sf::Texture& texture){
 
     sf::Vector2i tileCenter = isoToCartesian(cameraPos.x, cameraPos.y,tileWidth, tileHeight);
@@ -14,7 +46,7 @@ void Map::update (const sf::Vector2f& cameraPos, const sf::Texture& texture){
                 
                 // Créer le chunk s'il n'existe pas
                 if (chunks.find(chunkCoord) == chunks.end()) {
-                    chunks.emplace(chunkCoord, Chunk(x, y, tileWidth, tileHeight, texture));
+                    chunks.emplace(chunkCoord, Chunk(x, y, tileWidth, tileHeight, *this));
                     //std::cout << "Chunk créé: (" << x << ", " << y << ")" << std::endl;
                 }
                 
