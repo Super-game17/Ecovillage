@@ -27,14 +27,13 @@ public:
     std::vector<sf::Vertex> vertices;
     sf::VertexBuffer vertexBuffer;
     int chunkX, chunkY;
-    sf::Vector2f position;
 
     Chunk() = default;
 
     Chunk(int cx, int cy, int tileW, int tileH, Map& carte) ;
 
     // Helper pour ajouter un "cube/tuile" visuel au vecteur de vertices
-    void addTile(float worldX, float worldY, int zLevel, const sf::Color& color);
+    void addBlock(float worldX, float worldY, int zLevel, const sf::Color& color);
 
     // Helper pour générer un arbre à une position donnée
     void generateTree(int worldX, int worldY, int zGroundLevel);

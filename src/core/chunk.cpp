@@ -2,7 +2,7 @@
 #include "map.hpp"
 
 
-void Chunk::addTile(float worldX, float worldY, int zLevel, const sf::Color& color) {
+void Chunk::addBlock(float worldX, float worldY, int zLevel, const sf::Color& color) {
     // Dimensions (récupérées de tes constantes ou membres)
     // Note: Assure-toi que tileW/tileH sont accessibles ici (membres de classe ou passés en arg)
     float halfTileW = tileWidth / 2.0f; 
@@ -56,7 +56,7 @@ void Chunk::generateTree(int rootX, int rootY, int zGroundLevel) {
     // 2. Construction du Tronc
     for (int h = 0; h < height; h++) {
         // On empile les blocs en augmentant Z
-        addTile(rootX, rootY, zGroundLevel + h + 1, trunkColor);
+        addBlock(rootX, rootY, zGroundLevel + h + 1, trunkColor);
     }
 
     // 3. Construction des Feuilles (Sphère/Ellipsoïde)
@@ -74,7 +74,7 @@ void Chunk::generateTree(int rootX, int rootY, int zGroundLevel) {
                     // Ne pas écraser le tronc (optionnel, mais plus propre)
                     if (x == 0 && y == 0 && z < 0) continue;
 
-                    addTile(rootX + x, rootY + y, leafCenterZ + z, leavesColor);
+                    addBlock(rootX + x, rootY + y, leafCenterZ + z, leavesColor);
                 }
             }
         }
@@ -115,7 +115,7 @@ Chunk::Chunk(int cx, int cy, int tileW, int tileH, Map& carte)
                 } else {
                     color = sf::Color(250, 250, 250); // Neige
                 } 
-                addTile(worldX, worldY, zLevel, color);  
+                addBlock(worldX, worldY, zLevel, color);  
 
                 if (canHaveTree) {
                     // Décider de planter un arbre (2% de chance)

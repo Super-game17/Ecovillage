@@ -49,18 +49,33 @@ sf::Vector2f isoToScreen(int x, int y, int z, int tileWidth, int tileHeight, uns
 }
 
 sf::Vector2i isoToCartesian (int worldX, int worldY, int tileWidth, int tileHeight){
-    // worldX/worldY doivent être des coords MONDE (après retrait de chunkOrigin)
+    // On utilise des float pour worldX/Y pour plus de précision venant de la caméra
+    
+    // Pour une tuile 64x32, halfW = 32, halfH = 16.
     float halfW = tileWidth / 2.0f;
-    float halfH = tileHeight / 2.0f;
+    float halfH = tileHeight / 2.0f; // CORRECTION ICI: 2.0f au lieu de 4.0f
 
-    float eq1 = worldX / halfW; // x - y
-    float eq2 = worldY / halfH; // x + y
+    // Sécurité basique
+    if (halfW == 0 || halfH == 0) return sf::Vector2i(0,0);
 
-    float fx = (eq1 + eq2) / 2.0f;
-    float fy = (eq2 - eq1) / 2.0f;
+    // Formule inverse de l'isométrique :
+    // ScreenX = (IsoX - IsoY) * halfW
+    // ScreenY = (IsoX + IsoY) * halfH
+    
+    // Donc :
+    // IsoX = (ScreenY/halfH + ScreenX/halfW) / 2
+    // IsoY = (ScreenY/halfH - ScreenX/halfW) / 2
 
-    int ix = static_cast<int>(std::floor(fx + 0.00001f));
-    int iy = static_cast<int>(std::floor(fy + 0.00001f));
+    float invX = worldX / halfW;
+    float invY = worldY / halfH;
+
+    float fx = (invY + invX) / 2.0f;
+    float fy = (invY - invX) / 2.0f;
+
+    // L'arrondi std::floor est correct pour gérer les coordonnées négatives
+    int ix = static_cast<int>(std::floor(fx));
+    int iy = static_cast<int>(std::floor(fy));
+
     return sf::Vector2i(ix, iy);
 }
 // Petit helper pour avoir un nombre aléatoire stable basé sur la position

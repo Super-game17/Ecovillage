@@ -113,3 +113,22 @@ void Map::render(sf::RenderWindow& window, sf::Texture& texture) const {
             chunk->draw(window, states);
         }
 }
+// Vérifie si une case contient un obstacle (Arbre ou Eau)
+bool Map::isObstacle(int x, int y) const {
+    int zLevel = getGroundLevel((float)x, (float)y);
+
+    // 1. L'eau bloque (niveau <= 5)
+    if (zLevel <= 5) return true;
+
+    // 2. Les falaises bloquent (on simplifie : si on est trop bas par rapport à l'entité)
+    // (Pour une collision parfaite, il faudrait passer le Z de l'entité, mais restons simple)
+
+    // 3. Arbre ? (Même condition que dans Chunk)
+    if (zLevel >= 7 && zLevel <= 10) { 
+        if (randomHash(x, y) < 0.02f) { // 2% de chance, comme avant
+            return true;
+        }
+    }
+
+    return false;
+}
