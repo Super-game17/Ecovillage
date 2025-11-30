@@ -11,7 +11,6 @@ private:
     float zoomLevel;
     float zoomMin;
     float zoomMax;
-
 public:
     Camera(float viewWidth, float viewHeight, sf::Vector2f initialCenter)
         : speed(15.0f), zoomLevel(1.0f), zoomMin(0.3f), zoomMax(10.0f) {

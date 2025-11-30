@@ -1,8 +1,10 @@
+
+
 #include "chunk.hpp"
 #include "map.hpp"
 
 
-void Chunk::addTile(float worldX, float worldY, int zLevel, const sf::Color& color) {
+void Chunk::addBlock(float worldX, float worldY, int zLevel, const sf::Color& color) {
     // Dimensions (récupérées de tes constantes ou membres)
     // Note: Assure-toi que tileW/tileH sont accessibles ici (membres de classe ou passés en arg)
     float halfTileW = tileWidth / 2.0f; 
@@ -13,6 +15,15 @@ void Chunk::addTile(float worldX, float worldY, int zLevel, const sf::Color& col
     auto [isoX, isoY] = isoToScreen(worldX, worldY, zLevel, tileWidth, tileHeight, swidth, sheight);
 
     sf::Vector2f tilePos(isoX, isoY);
+
+    // --- CALCUL DE LA CLÉ DE PROFONDEUR ---
+    // On doit savoir dans quelle "tranche" locale ce bloc se trouve.
+    // worldX et worldY sont les coordonnées globales.
+    // On récupère les coordonnées locales dans le chunk.
+    int localX = static_cast<int>(worldX) - (chunkX * SIZE);
+    int localY = static_cast<int>(worldY) - (chunkY * SIZE);
+
+    int depthIndex = localX + localY; // C'est notre clé de tri !
 
     // Coordonnées de texture (Pour l'instant tout la texture, plus tard l'atlas)
     // Je suppose que tu gardes texSize en membre ou tu le passes. 
@@ -31,7 +42,12 @@ void Chunk::addTile(float worldX, float worldY, int zLevel, const sf::Color& col
         { sf::Vector2f(halfTileW, tileHeightFull) + tilePos, color, texCoordEnd }
     };
 
-    for (int i = 0; i < 6; i++) vertices.push_back(v[i]);
+    //for (int i = 0; i < 6; i++) vertices.push_back(v[i]);
+
+    // Au lieu de vertices.push_back(...), on ajoute à la slice correspondante
+    for (int i = 0; i < 6; i++) {
+        slices[depthIndex].push_back(v[i]);
+    }
 }
 
 void Chunk::generateTree(int rootX, int rootY, int zGroundLevel) {
@@ -56,7 +72,7 @@ void Chunk::generateTree(int rootX, int rootY, int zGroundLevel) {
     // 2. Construction du Tronc
     for (int h = 0; h < height; h++) {
         // On empile les blocs en augmentant Z
-        addTile(rootX, rootY, zGroundLevel + h + 1, trunkColor);
+        addBlock(rootX, rootY, zGroundLevel + h + 1, trunkColor);
     }
 
     // 3. Construction des Feuilles (Sphère/Ellipsoïde)
@@ -74,7 +90,7 @@ void Chunk::generateTree(int rootX, int rootY, int zGroundLevel) {
                     // Ne pas écraser le tronc (optionnel, mais plus propre)
                     if (x == 0 && y == 0 && z < 0) continue;
 
-                    addTile(rootX + x, rootY + y, leafCenterZ + z, leavesColor);
+                    addBlock(rootX + x, rootY + y, leafCenterZ + z, leavesColor);
                 }
             }
         }
@@ -84,7 +100,7 @@ void Chunk::generateTree(int rootX, int rootY, int zGroundLevel) {
 Chunk::Chunk(int cx, int cy, int tileW, int tileH, Map& carte)
         : chunkX(cx), chunkY(cy) {
 
-        vertices.reserve(SIZE * SIZE * 6 * 2); // 6 vertices par tile (2 triangles) * 2 (pour les arbres potentiels)
+       // vertices.reserve(SIZE * SIZE * 6 * 2); // 6 vertices par tile (2 triangles) * 2 (pour les arbres potentiels)
     
         int baseX = cx * SIZE;
         int baseY = cy * SIZE;
@@ -115,7 +131,7 @@ Chunk::Chunk(int cx, int cy, int tileW, int tileH, Map& carte)
                 } else {
                     color = sf::Color(250, 250, 250); // Neige
                 } 
-                addTile(worldX, worldY, zLevel, color);  
+                addBlock(worldX, worldY, zLevel, color);  
 
                 if (canHaveTree) {
                     // Décider de planter un arbre (2% de chance)
@@ -127,15 +143,27 @@ Chunk::Chunk(int cx, int cy, int tileW, int tileH, Map& carte)
             }
         }
         
-    // Créer le VertexBuffer
+    /*// Créer le VertexBuffer
     vertexBuffer.setUsage(sf::VertexBuffer::Usage::Static);
     // SFML primitive type enum: use the PrimitiveType::Triangles value
     vertexBuffer.setPrimitiveType(sf::PrimitiveType::Triangles);
     // Some SFML functions are [[nodiscard]]; explicitly ignore their return values
     (void)vertexBuffer.create(static_cast<std::size_t>(vertices.size()));
-    (void)vertexBuffer.update(vertices.data());
+    (void)vertexBuffer.update(vertices.data());*/
     }
     
-void Chunk::draw(sf::RenderTarget& target, sf::RenderStates states) const {
-        target.draw(vertexBuffer, states);
+void Chunk::drawLayer(sf::RenderTarget& target, sf::RenderStates states, int globalDepth) const {
+        //target.draw(vertexBuffer, states);
+        // On dessine uniquement la slice correspondant à globalDepth
+        int chunkBaseDepth = chunkX * SIZE + chunkY * SIZE;
+        int localDepth = globalDepth - chunkBaseDepth;
+
+        auto it = slices.find(localDepth);
+        if(it != slices.end()){
+            const std::vector<sf::Vertex>& layerVerts = it->second;
+            if (!layerVerts.empty()) {
+                target.draw(layerVerts.data(), layerVerts.size(), sf::PrimitiveType::Triangles, states);
+            }
+        }
     }
+

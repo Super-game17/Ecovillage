@@ -1,3 +1,4 @@
+
 #ifndef CHUNK_HPP
 #define CHUNK_HPP
 #include "SFML/Graphics.hpp"
@@ -24,22 +25,23 @@ struct ChunkCoord {
 class Chunk {
 public:
     static constexpr int SIZE = 16;
-    std::vector<sf::Vertex> vertices;
+    //std::vector<sf::Vertex> vertices;
+    std::map<int, std::vector<sf::Vertex>> slices;
     sf::VertexBuffer vertexBuffer;
     int chunkX, chunkY;
-    sf::Vector2f position;
 
     Chunk() = default;
 
     Chunk(int cx, int cy, int tileW, int tileH, Map& carte) ;
 
     // Helper pour ajouter un "cube/tuile" visuel au vecteur de vertices
-    void addTile(float worldX, float worldY, int zLevel, const sf::Color& color);
+    void addBlock(float worldX, float worldY, int zLevel, const sf::Color& color);
 
     // Helper pour générer un arbre à une position donnée
     void generateTree(int worldX, int worldY, int zGroundLevel);
 
-    void draw(sf::RenderTarget& target, sf::RenderStates states) const;
+    void drawLayer(sf::RenderTarget& target, sf::RenderStates states, int globalDepth) const;
 };
 
 #endif //CHUNK_HPP
+

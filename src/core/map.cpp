@@ -1,5 +1,5 @@
 #include "map.hpp"
-
+#include "entity.hpp"
 void Map::initNoise(){
         noise.SetNoiseType(FastNoiseLite::NoiseType_Perlin);
         noise.SetFrequency(0.008f); // TRÈS IMPORTANT: joue avec cette valeur !
@@ -103,13 +103,80 @@ void Map::update (const sf::Vector2f& cameraPos, const sf::Texture& texture){
         // === FIN DU DÉCHARGEMENT DES CHUNKS ===
 }
 
-void Map::render(sf::RenderWindow& window, sf::Texture& texture) const {
+void Map::render(sf::RenderWindow& window, sf::Texture& texture, Entity& player) const {
     // Dessiner tous les chunks visibles
         sf::RenderStates states;
         states.texture = &texture;
         states.transform.translate(chunkOrigin);
         
-        for (const auto* chunk : chunksToRender) {
+        /*for (const auto* chunk : chunksToRender) {
             chunk->draw(window, states);
+        }*/
+       // 1. Calculer l'étendue des profondeurs visibles
+    // Pour ne pas boucler de 0 à l'infini, on regarde les chunks visibles.
+    if (chunksToRender.empty()) return;
+
+    // Valeurs arbitraires larges pour commencer, ou basées sur chunksToRender
+    // Une méthode simple : on prend le min/max des chunks visibles
+    int minChunkCoord = -10000; 
+    int maxChunkCoord = 10000;
+    
+    // Optimisation : On peut calculer minDepth et maxDepth précis 
+    // en itérant sur chunksToRender une fois, mais restons simples :
+    // On va boucler sur les diagonales (profondeurs) possibles de la vue actuelle.
+    
+    // Calculons les bornes de profondeur basées sur les chunks visibles
+    int minDepth = 999999;
+    int maxDepth = -999999;
+
+    for (const auto* chunk : chunksToRender) {
+        int baseDepth = (chunk->chunkX * Chunk::SIZE) + (chunk->chunkY * Chunk::SIZE);
+        if (baseDepth < minDepth) minDepth = baseDepth;
+        // La profondeur max d'un chunk est base + (SIZE*2)
+        if (baseDepth + (Chunk::SIZE * 2) > maxDepth) maxDepth = baseDepth + (Chunk::SIZE * 2);
+    }
+
+    // AJOUTER L'ENTITÉ DANS LE CALCUL (IMPORTANT)
+    // Sinon si l'entité sort de la zone des chunks, elle disparaitrait
+    // (Supposons qu'on a accès au joueur ici, ou on passe une liste d'entités à render)
+    // Pour l'instant, on suppose que le joueur est toujours dans les limites des chunks chargés.
+
+    // 2. BOUCLE PRINCIPALE DE RENDU (Le "Depth Loop")
+    // On dessine du fond (petit depth) vers l'avant (grand depth)
+    
+    // NOTE: Il nous faut une référence au joueur ici. 
+    // Idéalement, passe `Entity& player` à la fonction render() ou stocke une ref dans Map.
+    // Je vais supposer que tu modifies la signature : void render(..., const Entity& player)
+    for (int d = minDepth; d <= maxDepth; ++d) {
+        
+        // A. Dessiner le terrain pour cette profondeur 'd'
+        for (const auto* chunk : chunksToRender) {
+            chunk->drawLayer(window, states, d);
         }
+
+        // B. Dessiner le joueur s'il est à cette profondeur 'd'
+        // (Tu devras passer 'player' à cette fonction render)
+         if (player.getDepth() == d) {
+             player.draw(window, *this);
+         }
+    }
+}
+// Vérifie si une case contient un obstacle (Arbre ou Eau)
+bool Map::isObstacle(int x, int y) const {
+    int zLevel = getGroundLevel((float)x, (float)y);
+
+    // 1. L'eau bloque (niveau <= 5)
+    if (zLevel <= 5) return true;
+
+    // 2. Les falaises bloquent (on simplifie : si on est trop bas par rapport à l'entité)
+    // (Pour une collision parfaite, il faudrait passer le Z de l'entité, mais restons simple)
+
+    // 3. Arbre ? (Même condition que dans Chunk)
+    if (zLevel >= 7 && zLevel <= 10) { 
+        if (randomHash(x, y) < 0.02f) { // 2% de chance, comme avant
+            return true;
+        }
+    }
+
+    return false;
 }

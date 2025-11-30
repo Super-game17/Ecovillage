@@ -3,19 +3,30 @@
 #include"camera.hpp"
 #include "map.hpp"
 #include"utilitaires.hpp"
-int main(){
+#include "entity.hpp"
 
+int main(){
     Camera camera(static_cast<float>(swidth), static_cast<float>(sheight), sf::Vector2f(swidth/2.f, sheight/2.f));
     sf::RenderWindow window(sf::VideoMode({swidth, sheight}), "Chunk System");
     Map Carte;
-    sf::Texture texture;
-    if(!texture.loadFromFile("assets/sprites/block.png")){
-        std::cerr << "Erreur lors du chargement de la texture" << std::endl;
+    Carte.initNoise();
+    
+    // Charger la texture des blocs
+    sf::Texture textureBlocks;
+    if(!textureBlocks.loadFromFile("assets/sprites/block.png")){
+        std::cerr << "Erreur lors du chargement de la texture des blocs" << std::endl;
         return -1;
     }
-    texture.setSmooth(true);
+    textureBlocks.setSmooth(true);
     
+    // Créer l'entité joueur
+    Entity player(0, 0);
+    player.updateVisualPosition(Carte);
+    sf::Clock gameClock;
+
     while (window.isOpen()){
+        float deltaTime = gameClock.restart().asSeconds();
+
         while (const std::optional event = window.pollEvent()){
             if (event->is<sf::Event::Closed>()){
                 window.close();
@@ -40,12 +51,17 @@ int main(){
         camera.handleInput(window);
         camera.update(window);
         
-        Carte.update(camera.getCenter(), texture);
+        // Mettre à jour l'entité avec deltaTime
+        player.update(deltaTime);
+        
+        Carte.update(camera.getCenter(), textureBlocks);
         window.clear(sf::Color(153, 204, 255));
         
         // Dessiner tous les chunks visibles
-        Carte.render(window, texture);
-        afficher_grille_iso(window,swidth,sheight);
+        Carte.render(window, textureBlocks, player);
+        
+        //player.draw(window, Carte);
+        player.HandleInput(window, Carte);
         window.display();
     }
     
