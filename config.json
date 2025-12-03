@@ -1,0 +1,12 @@
+{
+    "renderDistance": 3,
+    "world": {
+        "contrast": 3.5,
+        "frequency": 0.00800000037997961,
+        "heightScale": 80.0,
+        "lacunarity": 2.0,
+        "octaves": 6,
+        "persistence": 0.5,
+        "seed": 1337
+    }
+}

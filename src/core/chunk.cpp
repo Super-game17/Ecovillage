@@ -3,39 +3,51 @@
 
 
 void Chunk::addBlock(float worldX, float worldY, int zLevel, const sf::Color& color) {
-    // Dimensions (récupérées de tes constantes ou membres)
-    // Note: Assure-toi que tileW/tileH sont accessibles ici (membres de classe ou passés en arg)
+    // Dimensions (récupérées de utilitaires.hpp)
     float halfTileW = tileWidth / 2.0f; 
     float tileHeightFull = tileHeight * 2.0f; 
-    float heightPerZLevel = tileHeight; // Hauteur visuelle d'un bloc Z
 
     // Position isométrique
     auto [isoX, isoY] = isoToScreen(worldX, worldY, zLevel, tileWidth, tileHeight, swidth, sheight);
 
     sf::Vector2f tilePos(isoX, isoY);
 
-    // Coordonnées de texture (Pour l'instant tout la texture, plus tard l'atlas)
-    // Je suppose que tu gardes texSize en membre ou tu le passes. 
-    // Pour simplifier ici, je mets des valeurs par défaut, à adapter selon ton code
-    sf::Vector2f texCoordStart(0.0f, 0.0f);
-    sf::Vector2f texCoordEnd(100.0f, 100.0f); // Remplace par la taille réelle de ta texture
+    // --- CALCUL DE LA CLÉ DE PROFONDEUR ---
+    // On doit savoir dans quelle "tranche" locale ce bloc se trouve.
+    // worldX et worldY sont les coordonnées globales.
+    // On récupère les coordonnées locales dans le chunk.
+    int localX = static_cast<int>(worldX) - (chunkX * SIZE);
+    int localY = static_cast<int>(worldY) - (chunkY * SIZE);
 
-    // Création des vertices (copié de ton code original)
+    int depthIndex = localX + localY; // C'est notre clé de tri !
+
+    // Coordonnées de texture (Pour l'instant tout la texture, plus tard l'atlas)
+    sf::Vector2f texCoordStart(0.0f, 0.0f);
+    sf::Vector2f texCoordEnd(100.0f, 100.0f);
+
+    // Création des vertices (6 pour 2 triangles)
     sf::Vertex v[6] = {
+        // Triangle 1
         { sf::Vector2f(-halfTileW, 0.0f) + tilePos, color, texCoordStart },
         { sf::Vector2f(halfTileW, 0.0f) + tilePos, color, sf::Vector2f(texCoordEnd.x, texCoordStart.y) },
         { sf::Vector2f(halfTileW, tileHeightFull) + tilePos, color, texCoordEnd },
         
+        // Triangle 2
         { sf::Vector2f(-halfTileW, 0.0f) + tilePos, color, texCoordStart },
         { sf::Vector2f(-halfTileW, tileHeightFull) + tilePos, color, sf::Vector2f(texCoordStart.x, texCoordEnd.y) },
         { sf::Vector2f(halfTileW, tileHeightFull) + tilePos, color, texCoordEnd }
     };
 
     for (int i = 0; i < 6; i++) vertices.push_back(v[i]);
+
+    // Au lieu de vertices.push_back(...), on ajoute à la slice correspondante
+    for (int i = 0; i < 6; i++) {
+        slices[depthIndex].push_back(v[i]);
+    }
 }
 
 void Chunk::generateTree(int rootX, int rootY, int zGroundLevel) {
-    // 1. Paramètres de base (couleurs fixes pour l'instant)
+    // 1. Paramètres de base
     sf::Color trunkColor(101, 67, 33);   // Marron
     sf::Color leavesColor(0, 100, 0);  // Vert foncé
 
@@ -84,18 +96,21 @@ void Chunk::generateTree(int rootX, int rootY, int zGroundLevel) {
 Chunk::Chunk(int cx, int cy, int tileW, int tileH, Map& carte)
         : chunkX(cx), chunkY(cy) {
 
-        vertices.reserve(SIZE * SIZE * 6 * 2); // 6 vertices par tile (2 triangles) * 2 (pour les arbres potentiels)
+       // vertices.reserve(SIZE * SIZE * 6 * 2); // 6 vertices par tile (2 triangles) * 2 (pour les arbres potentiels)
     
+       // Génération des blocs du chunk, coordonnées globales
         int baseX = cx * SIZE;
         int baseY = cy * SIZE;
         
+        // Parcours de chaque position dans le chunk
         for (int y = 0; y < SIZE; ++y) {
             for (int x = 0; x < SIZE; ++x) {
+                // Coordonnées mondiales pour les blocs
                 int worldX = baseX + x;
                 int worldY = baseY + y;
                 
                 int zLevel = carte.getGroundLevel(static_cast<float>(worldX), static_cast<float>(worldY));
-                // --- NOUVEAU : Couleur basée sur la hauteur ---
+                // Couleur basée sur la hauteur
                 sf::Color color;
                 bool canHaveTree = false;
 
@@ -127,15 +142,118 @@ Chunk::Chunk(int cx, int cy, int tileW, int tileH, Map& carte)
             }
         }
         
-    // Créer le VertexBuffer
-    vertexBuffer.setUsage(sf::VertexBuffer::Usage::Static);
-    // SFML primitive type enum: use the PrimitiveType::Triangles value
-    vertexBuffer.setPrimitiveType(sf::PrimitiveType::Triangles);
-    // Some SFML functions are [[nodiscard]]; explicitly ignore their return values
-    (void)vertexBuffer.create(static_cast<std::size_t>(vertices.size()));
-    (void)vertexBuffer.update(vertices.data());
+        // Construire les buffers GPU une seule fois après avoir généré tous les vertices
+        buildBuffers();
+        buildFastBuffer();
     }
     
-void Chunk::draw(sf::RenderTarget& target, sf::RenderStates states) const {
-        target.draw(vertexBuffer, states);
+void Chunk::buildBuffers() {
+    // Transférer les slices vers GPU
+    for (auto& [depth, vertices] : slices) {
+        if (vertices.empty()) continue;
+        
+        // Création et remplissage du VertexBuffer
+        (void)layerBuffers[depth].create(vertices.size());
+        // Définir le type de primitive et l'usage
+        layerBuffers[depth].setPrimitiveType(sf::PrimitiveType::Triangles);
+        layerBuffers[depth].setUsage(sf::VertexBuffer::Usage::Static);
+        // Mettre à jour les données
+        (void)layerBuffers[depth].update(vertices.data());
     }
+}
+
+void::Chunk::buildFastBuffer() {
+    // Création et remplissage du VertexBuffer
+    (void)vertexBuffer.create(vertices.size());
+    // Définir le type de primitive et l'usage
+    vertexBuffer.setPrimitiveType(sf::PrimitiveType::Triangles);
+    vertexBuffer.setUsage(sf::VertexBuffer::Usage::Static);
+    // Mettre à jour les données
+    (void)vertexBuffer.update(vertices.data());
+}
+
+void::Chunk::drawFast(sf::RenderTarget& target, sf::RenderStates states) const {
+    // Dessiner directement depuis le buffer GPU
+    target.draw(vertexBuffer, states);
+}
+
+void Chunk::drawLayer(sf::RenderTarget& target, sf::RenderStates states, int localDepth, int globalDepth, int playerDepth, sf::Vector2f playerPos) const {
+    
+    // Récupérer le buffer GPU pour cette couche
+    auto it = layerBuffers.find(localDepth);
+    // Si pas de buffer pour cette couche, rien à dessiner
+    if (it == layerBuffers.end()) return;
+    
+    if (playerDepth == 0) {
+        // Pas de joueur spécifié, dessiner normalement
+        target.draw(it->second, states);
+        return;
+    }
+    // Simple heuristic: Only do expensive CPU transparency if globalDepth is close to playerDepth
+    // AND we are in a layer that is physically capable of hiding the player.
+    bool checkTransparency = (globalDepth > playerDepth) && (globalDepth < playerDepth + 10);
+
+    if (!checkTransparency) {
+        // Dessiner directement depuis le buffer GPU
+        target.draw(it->second, states);
+        return;
+    }
+    // On doit dessiner avec transparence les blocs qui couvrent >70% du joueur
+    auto sliceIt = slices.find(localDepth);
+    
+    // COPYING VERTICES IS EXPENSIVE. Only do it if we really need to.
+    // We can do a quick bounds check on the whole layer vs player before copying.
+    
+    std::vector<sf::Vertex> modifiedVertices = sliceIt->second;
+    sf::FloatRect playerBounds = getPlayerBounds(playerPos);
+    
+    bool modified = false;
+
+    // Parcourir les vertices par blocs (6 vertices par bloc)
+    for (size_t i = 0; i < modifiedVertices.size(); i += 6) {
+        // Calculer les bounds du bloc à partir des positions des vertices
+        float minX = std::min({modifiedVertices[i].position.x, modifiedVertices[i+1].position.x, 
+                                modifiedVertices[i+2].position.x, modifiedVertices[i+3].position.x,
+                                modifiedVertices[i+4].position.x, modifiedVertices[i+5].position.x});
+        float maxX = std::max({modifiedVertices[i].position.x, modifiedVertices[i+1].position.x, 
+                                modifiedVertices[i+2].position.x, modifiedVertices[i+3].position.x,
+                                modifiedVertices[i+4].position.x, modifiedVertices[i+5].position.x});
+        float minY = std::min({modifiedVertices[i].position.y, modifiedVertices[i+1].position.y, 
+                                modifiedVertices[i+2].position.y, modifiedVertices[i+3].position.y,
+                                modifiedVertices[i+4].position.y, modifiedVertices[i+5].position.y});
+        float maxY = std::max({modifiedVertices[i].position.y, modifiedVertices[i+1].position.y, 
+                                modifiedVertices[i+2].position.y, modifiedVertices[i+3].position.y,
+                                modifiedVertices[i+4].position.y, modifiedVertices[i+5].position.y});
+        
+        sf::FloatRect blockBounds({minX, minY}, {maxX - minX, maxY - minY});
+        
+
+        float overlap = calculateOverlap(blockBounds, playerBounds);
+        
+        // Appliquer transparence si overlap > 70%
+        if (overlap > 0.7f) {
+            modified = true;
+            for (size_t j = i; j < i + 6; ++j) {
+                modifiedVertices[j].color.a = 128; // 50% transparent
+            }
+        }
+    }
+    
+    // Dessiner avec les vertices modifiés
+    target.draw(modifiedVertices.data(), modifiedVertices.size(), sf::PrimitiveType::Triangles, states);
+    }
+
+sf::FloatRect Chunk::getBlockBounds(int worldX, int worldY, int zLevel) const {
+    auto [screenX, screenY] = isoToScreen(worldX, worldY, zLevel, tileWidth, tileHeight, swidth, sheight);
+    return sf::FloatRect({screenX - tileWidth/2.f, screenY - tileHeight}, {static_cast<float>(tileWidth), tileHeight * 2.f});
+}
+
+float Chunk::calculateOverlap(const sf::FloatRect& block, const sf::FloatRect& player) {
+    auto intersection = block.findIntersection(player);
+    if (!intersection.has_value()) return 0.0f;
+    
+    float intersectionArea = intersection->size.x * intersection->size.y;
+    float playerArea = player.size.x * player.size.y;
+    
+    return intersectionArea / playerArea; // Retourne 0.0 à 1.0
+}

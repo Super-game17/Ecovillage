@@ -74,6 +74,10 @@ public:
         return view.getCenter();
     }
 
+    void setCenter(const sf::Vector2f& center) {
+        view.setCenter(center);
+    }
+
     float getZoomLevel() const {
         return zoomLevel;
     }

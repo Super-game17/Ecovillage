@@ -1,49 +1,80 @@
 #include "map.hpp"
+#include "entity.hpp"
+#include <algorithm>
+#include <vector>
+#include <cmath>
 
-void Map::initNoise(){
-        noise.SetNoiseType(FastNoiseLite::NoiseType_Perlin);
-        noise.SetFrequency(0.008f); // TRÈS IMPORTANT: joue avec cette valeur !
-                                   // Plus elle est petite, plus le terrain est "zoomé"
-        // 2. Ajoute des octaves pour plus de détails (comme Minecraft)
-        noise.SetFractalType(FastNoiseLite::FractalType_FBm);
-        noise.SetFractalOctaves(6); // Comme dans ton exemple (6 octaves)
-        noise.SetFractalLacunarity(2.0f);
-        noise.SetFractalGain(0.45f); // Comme dans ton exemple
+void Map::initNoise(const WorldConfig& config){
+    currentConfig = config; // Sauvegarde la config actuelle
+    
+    noise.SetSeed(config.seed);
+    noise.SetNoiseType(FastNoiseLite::NoiseType_Perlin);
+    noise.SetFrequency(config.frequency);
+    noise.SetFractalType(FastNoiseLite::FractalType_FBm);
+    noise.SetFractalOctaves(config.octaves);
+    noise.SetFractalLacunarity(config.lacunarity);
+    noise.SetFractalGain(config.persistence);
+}
 
+void Map::reset(MapMode mode, const WorldConfig& config) {
+    // Tout nettoyer
+    chunks.clear();
+    chunksToRender.clear();
+    lastCenterChunkX = -99999;
+    lastCenterChunkY = -99999;
+    
+    // Appliquer les nouveaux paramètres
+    currentMode = mode;
+    initNoise(config);
+    
+    // Si le mode est FINI, on peut prégénérer une zone ici (ex: 4x4 chunks)
+    // Pour l'instant on laisse l'update le faire, mais on limitera l'update
 }
 
 int Map::getGroundLevel(float worldX, float worldY) const{
-
-    // 2. Obtenir la valeur du bruit pour cette coordonnée
+    // Obtenir la valeur du bruit pour cette coordonnée
     //    On utilise les coordonnées MONDE (worldX, worldY)
     //    GetNoise() renvoie une valeur entre -1.0 et 1.0
-    float noiseValue = noise.GetNoise((float)worldX, (float)worldY);
+    float noiseValue = noise.GetNoise(worldX, worldY);
     float noise01 = (noiseValue + 1.0f) * 0.5f; // Convertir [-1,1] en [0,1]
-
-    // 4. Élévation exponentielle (comme dans ton exemple avec pow)
-    noise01 = std::pow(noise01, 3.5f); // Augmente le contraste
+    // Élévation exponentielle (comme dans ton exemple avec pow)
+    noise01 = std::pow(noise01, currentConfig.contrast); // Augmente le contraste
     // Convertir le bruit en niveaux de hauteur entiers (ex: 0 à 10)
     // (noiseValue + 1.0) -> [0, 2]
     // * 5.0 -> [0, 10]
     // 5. Calculer la hauteur finale
-    int zLevel = static_cast<int>(noise01 * 80.0f); // 0 à 80 blocs
-
+    int zLevel = static_cast<int>(noise01 * currentConfig.heightScale); 
     return zLevel;
-
 }
+
 
 void Map::update (const sf::Vector2f& cameraPos, const sf::Texture& texture){
 
     sf::Vector2i tileCenter = isoToCartesian(cameraPos.x, cameraPos.y,tileWidth, tileHeight);
     int centerChunkX = static_cast<int>(std::floor(static_cast<float>(tileCenter.x) / Chunk::SIZE));
     int centerChunkY = static_cast<int>(std::floor(static_cast<float>(tileCenter.y) / Chunk::SIZE));
+
+    // OPTIMIZATION: Only update chunks list if we moved to a different chunk
+    if (centerChunkX == lastCenterChunkX && centerChunkY == lastCenterChunkY) {
+        return;
+    }
+    lastCenterChunkX = centerChunkX;
+    lastCenterChunkY = centerChunkY;
+
     chunksToRender.clear();
+
+    // Limites pour le mode FINI (Par exemple un carré de 6x6 chunks autour de 0,0)
+    int limitMin = -3;
+    int limitMax = 3;
 
     // Générer et collecter les chunks visibles
         for (int y = -renderDistance + centerChunkY; y <= renderDistance + centerChunkY; y++) {
             for (int x = -renderDistance + centerChunkX; x <= renderDistance + centerChunkX; x++) {
+                // Si mode FINI, on ne génère pas au delà des limites
+                if (currentMode == MapMode::FINITE) {
+                    if (x < limitMin || x > limitMax || y < limitMin || y > limitMax) continue;
+                }
                 ChunkCoord chunkCoord(x, y);
-                
                 // Créer le chunk s'il n'existe pas
                 if (chunks.find(chunkCoord) == chunks.end()) {
                     chunks.emplace(chunkCoord, Chunk(x, y, tileWidth, tileHeight, *this));
@@ -65,6 +96,7 @@ void Map::update (const sf::Vector2f& cameraPos, const sf::Texture& texture){
         });
         // === FIN DE LA MODIFICATION ===
 
+        if (currentMode == MapMode::INFINITE) {
         // === DÉBUT DU DÉCHARGEMENT DES CHUNKS ===
         
         // On garde une "zone tampon" de 2 chunks
@@ -101,17 +133,107 @@ void Map::update (const sf::Vector2f& cameraPos, const sf::Texture& texture){
             }
         }
         // === FIN DU DÉCHARGEMENT DES CHUNKS ===
+    }
 }
 
-void Map::render(sf::RenderWindow& window, sf::Texture& texture) const {
+// VERSION OPTIMISÉE POUR PERLIN-PLAY (Ton ancien code rapide)
+void Map::renderFast(sf::RenderWindow& window, sf::Texture& texture) const {
+    sf::RenderStates states;
+    states.texture = &texture;
+    states.transform.translate(chunkOrigin);
+    
+    for (const auto* chunk : chunksToRender) {
+        chunk->drawFast(window, states);
+    }
+}
+
+void Map::render(sf::RenderWindow& window, sf::Texture& texture, const std::vector<Entity*>& entities, const Entity* player) const {
     // Dessiner tous les chunks visibles
-        sf::RenderStates states;
-        states.texture = &texture;
-        states.transform.translate(chunkOrigin);
-        
-        for (const auto* chunk : chunksToRender) {
-            chunk->draw(window, states);
+    sf::RenderStates states;
+    states.texture = &texture;
+    states.transform.translate(chunkOrigin);
+    
+    if (chunksToRender.empty()) return;
+
+    // OPTIMIZATION: Flatten the render loop
+    // Instead of looping depths -> chunks, we collect all layers and sort them.
+    struct RenderItem {
+        int globalDepth;
+        int localDepth;
+        const Chunk* chunk;
+    };
+
+    // Reserve memory to avoid allocations (estimate: chunks * avg_layers_per_chunk)
+    static std::vector<RenderItem> renderQueue; // Static to reuse memory
+    renderQueue.clear();
+    renderQueue.reserve(chunksToRender.size() * 16);
+
+    for (const auto* chunk : chunksToRender) {
+        // Iterate over the chunk's existing buffers directly
+        for (const auto& [localDepth, buffer] : chunk->layerBuffers) {
+            int globalDepth = (chunk->chunkX * Chunk::SIZE) + (chunk->chunkY * Chunk::SIZE) + localDepth;
+            renderQueue.push_back({globalDepth, localDepth, chunk});
         }
+    }
+
+    // Sort by global depth (Painter's Algorithm)
+    std::sort(renderQueue.begin(), renderQueue.end(), [](const RenderItem& a, const RenderItem& b) {
+        return a.globalDepth < b.globalDepth;
+    });
+
+
+    // 2. Préparer et trier les entités
+    std::vector<Entity*> sortedEntities = entities;
+    std::sort(sortedEntities.begin(), sortedEntities.end(), [](Entity* a, Entity* b) {
+        return a->getDepth() < b->getDepth();
+    });
+
+    // 3. Boucle de rendu mixte (Terrain + Entités)
+    auto entityIt = sortedEntities.begin();
+    if(player == nullptr){
+    for (const auto& item : renderQueue) {
+
+         // A. Dessiner les entités qui sont DERRIÈRE ou AU MÊME NIVEAU que cette couche de terrain
+        // Note : On compare getDepth() (gridX + gridY) avec globalDepth.
+        while (entityIt != sortedEntities.end() && (*entityIt)->getDepth() < item.globalDepth) {
+            (*entityIt)->draw(window, *this);
+            ++entityIt;
+        }
+
+        // Draw the layer
+        // We pass localDepth directly to avoid map lookups inside drawLayer
+        item.chunk->drawLayer(window, states, item.localDepth, item.globalDepth);
+    }
+    }else{
+        // Draw sorted layers
+        int playerDepth = player->getDepth();
+        bool playerDrawn = false;
+        for (const auto& item : renderQueue) {
+            while (entityIt != sortedEntities.end() && (*entityIt)->getDepth() < item.globalDepth) {
+            (*entityIt)->draw(window, *this);
+            ++entityIt;
+        }
+        // Draw player if we reached their depth
+        if (!playerDrawn && item.globalDepth > playerDepth) {
+            player->draw(window, *this);
+            playerDrawn = true;
+        }
+
+        // Draw the layer
+        // We pass localDepth directly to avoid map lookups inside drawLayer
+        item.chunk->drawLayer(window, states, item.localDepth, item.globalDepth, playerDepth, player->shape.getPosition());
+        }
+        if (!playerDrawn)
+        {
+            player->draw(window, *this);
+        }
+    }
+
+    // 4. Dessiner les entités restantes (celles qui sont devant tout le terrain)
+    while (entityIt != sortedEntities.end()) {
+        (*entityIt)->draw(window, *this);
+        ++entityIt;
+    }
 }
 // Vérifie si une case contient un obstacle (Arbre ou Eau)
 bool Map::isObstacle(int x, int y) const {
@@ -131,4 +253,10 @@ bool Map::isObstacle(int x, int y) const {
     }
 
     return false;
+}
+
+bool Map::isWater(int x, int y) const {
+
+    // L'eau est définie comme les niveaux <= 5
+    return getGroundLevel((float)x, (float)y) <= 5;
 }

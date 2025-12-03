@@ -93,3 +93,13 @@ float randomHash(int x, int y) {
     // Le modulo 10000 donne un entier entre 0 et 9999
     return (float)(seed % 10000) / 10000.0f;
 }
+
+// Helper pour obtenir les bounds du joueur (basé sur shape 20x40, origine {10,40})
+sf::FloatRect getPlayerBounds(sf::Vector2f playerPos) {
+    const float halfWidth = 10.0f;   // shape width = 20
+    const float height    = 40.0f;   // shape height = 40
+    float left = playerPos.x - halfWidth;
+    float top  = playerPos.y - height;
+    return sf::FloatRect({left, top}, {halfWidth * 2.0f, height});
+}
+

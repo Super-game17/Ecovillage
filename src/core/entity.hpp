@@ -1,98 +1,141 @@
 #ifndef ENTITY_HPP
 #define ENTITY_HPP
-#include "SFML/Graphics.hpp"
 #include "map.hpp"
+#include <random>
+#include <cmath>
+#include<vector>
 
+enum  class EntityType{PLAYER,PREY,PREDATOR,FOOD};
+
+// Classe de base pour toutes les créatures
 class Entity {
 public:
-    // Coordonnées sur la grille (Entiers)
+    EntityType type;
     int gridX, gridY; 
-    
     sf::RectangleShape shape;
     sf::CircleShape shadow;
+    sf::CircleShape selectionCircle;
+    bool isAlive=true;
+    bool isSelected = false;
 
-    // Cooldown pour éviter les déplacements trop rapides
+    // États de l'entité
+    enum State {
+        IDLE,
+        WANDERING,
+        SEEKING_FOOD,
+        SEEKING_WATER,
+        FLEEING,
+        HUNTING,
+        DRINKING,
+        EATING
+    };
+    State currentState = IDLE;
+
     float moveCooldown = 0.f;
-    const float MOVE_DELAY = 0.2f; // délai entre deux mouvements (en secondes)
+    float MOVE_DELAY = 0.45f; // Délai entre les mouvements (ralenti)
 
-    // Constructeur
-    Entity(int startX, int startY): gridX(startX), gridY(startY) 
-    {
-        // Configuration visuelle
-        shape.setSize(sf::Vector2f(20.f, 40.f));
-        shape.setOrigin({10.f, 40.f});
-        shape.setFillColor(sf::Color::Red);
+    sf::Vector2f currentScreenPos;
+    sf::Vector2f targetScreenPos;
+    float speed = 10.0f;
 
-        shadow.setRadius(10.f);
-        shadow.setOrigin({10.f, 5.f});
-        shadow.setScale({1.f, 0.5f});
-        shadow.setFillColor(sf::Color(0, 0, 0, 100));
-    }
+    Entity(int startX, int startY, EntityType t) ;
+   
+    virtual ~Entity() = default;
 
-    // Déplacer le joueur d'une case
-    void move(int dx, int dy, const Map& map){
-        int targetX = gridX + dx;
-        int targetY = gridY + dy;
-        if (map.isObstacle(targetX, targetY)){
-            // Ne pas bouger si obstacle
-            return;
-        }
-        gridX = targetX;
-        gridY = targetY;
+    sf::Vector2i getPosition(){return sf::Vector2i(gridX, gridY);}
+    int getDepth() const { return gridX + gridY; }
+
+    // Déplacement générique (utilisé par Joueur et IA)
+    bool move(int dx, int dy, const Map& map);
+       
+
+    void updateVisualPosition(const Map& map);
+    virtual void draw(sf::RenderTarget& target, const Map& Carte) const;
         
-        updateVisualPosition(map);
-        moveCooldown = MOVE_DELAY; // réinitialiser le cooldown
-    }
 
-    // Mettre à jour la position visuelle basée sur gridX, gridY
-    void updateVisualPosition(const Map& map) {
-        // 1. Récupérer la hauteur du sol à cette position
-        int zLevel = map.getGroundLevel(static_cast<float>(gridX), static_cast<float>(gridY));
+    virtual void update(float deltaTime); 
+    // Input manuel (pour le joueur uniquement)
+    void HandleInput(const sf::RenderWindow& window, const Map& Carte);
+    Entity* scanForTarget(const std::vector<Entity*>& entities, EntityType targetType, int radius);
+    sf::Vector2i scanForWater(const Map& map, int radius);
+    void Entity::moveTowards(int tx, int ty, const Map& map);
+    void setSelected(bool selected);
+    bool checkClick(int mouseX, int mouseY, const Map& carte) const;
+    std::string getStateString() const;
+    virtual std::string getStats() const;
+    void updateSelectionVisual();
 
-        auto [screenX, screenY] = isoToScreen(gridX, gridY, zLevel, tileWidth, tileHeight, swidth, sheight);
+};
 
-        // Appliquer la position
-        shape.setPosition({screenX, screenY + 25.f});
-        shadow.setPosition({screenX, screenY + 25.f});
-        //Logs pour debug
-        std::cout<<"===========================================================\n";
-        std::cout << "Entity moved to (" << gridX << ", " << gridY << ")\n";
-        std::cout << "Screen position: (" << screenX << ", " << screenY + 25.f << ")\n";
-        std::cout << "Ground level (z): " << zLevel << "\n";
-    }
 
-    void draw(sf::RenderTarget& target, const Map& Carte) const {
-        // Dessiner l'entité avec l'offset global
-        sf::RenderStates states;
-        states.transform.translate(Carte.chunkOrigin);
-        target.draw(shadow, states);
-        target.draw(shape, states);
-    }
+// --- Classe Nourriture -----
+class Food : public Entity {
+public:
+    Food(int x, int y) : Entity(x, y, EntityType::FOOD) {
+        // Apparence d'une baie ou d'un buisson
+        shape.setSize({10.f, 10.f});
+        shape.setOrigin({5.f, 5.f});
+        shape.setFillColor(sf::Color(255, 50, 50)); // Rouge
+        
+        shadow.setRadius(5.f);
+        shadow.setOrigin({5.f, 2.5f});
 
-    // Mettre à jour le cooldown (appeler une fois par frame avec deltaTime)
-    void update(float deltaTime) {
-        if (moveCooldown > 0.f) {
-            moveCooldown -= deltaTime;
-        }
-    }
+}
+};
 
-    void HandleInput(const sf::RenderWindow& window, const Map& Carte){
-        // Ne bouger que si le cooldown a expiré
-        if (moveCooldown > 0.f) return;
+// --- CLASSE PROIE ---
+class Prey : public Entity {
+public:
+    // Attributs biologiques
+    float hunger =0;       // 0 = rassasié, 100 = mort de faim
+    float thirst =0;       // 0 = hydraté, 100 = mort de soif
+    float energy=100;       // 100 = pleine forme, 0 = épuisé (doit dormir)
+    float urgeToReproduce=0; // Augmente avec le temps
 
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::I)) {
-            this->move(0, -1, Carte);
-        }
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::K)) {
-            this->move(0, 1, Carte);
-        }
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::J)) {
-            this->move(-1, 0, Carte);
-        }
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::L)) {
-            this->move(1, 0, Carte);
-        }
-    }
+    // Attributs génétiques (fixes pour une entité)
+    float maxSpeed;     // Influence le MOVE_DELAY
+    float visionRadius; // Distance de vue en cases
+
+    // IA
+    float aiTickTimer = 0.f;
+
+
+    Prey(int x, int y) ; 
+    void HandleInput(const sf::RenderWindow& window, const Map& Carte, const std::vector<Entity*>& entities);
+
+    void update(float deltaTime) override ;
+       
+    // Méthode principale de l'IA
+    void thinkAndAct(const Map& carte , const std::vector<Entity*>& entities) ;
+    std::string getStats() const override;
+    void determineState();
+        
+};
+
+class Predator : public Entity {
+    public:
+    float hunger =0;       // 0 = rassasié, 100 = mort de faim
+    float thirst =0;       // 0 = hydraté, 100 = mort de soif
+    float energy=100;       // 100 = pleine forme, 0 = épuisé (doit dormir)
+    float urgeToReproduce=0; // Augmente avec le temps
+
+    // Attributs génétiques (fixes pour une entité)
+    float maxSpeed;     // Influence le MOVE_DELAY
+    float visionRadius; // Distance de vue en cases
+
+    // IA
+    float aiTickTimer = 0.f;
+    
+    Predator(int x,int y);
+    void update(float deltaTime) override ;
+       
+    // Méthode principale de l'IA
+    void thinkAndAct(const Map& carte , const std::vector<Entity*>& entities) ;
+
+    std::string getStats() const override;
+    void determineState();
+
+
 };
 
 #endif //ENTITY_HPP

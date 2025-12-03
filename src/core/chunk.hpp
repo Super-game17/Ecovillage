@@ -1,6 +1,5 @@
 #ifndef CHUNK_HPP
 #define CHUNK_HPP
-#include "SFML/Graphics.hpp"
 #include "FastNoiseLite.h"
 #include "utilitaires.hpp"
 #include<map>
@@ -23,22 +22,39 @@ struct ChunkCoord {
 // Structure de Chunk
 class Chunk {
 public:
+    //Initialisation des attributs de la classe Chunk
+    //std::vector<sf::Vertex> vertices; // Vertices CPU
     static constexpr int SIZE = 16;
-    std::vector<sf::Vertex> vertices;
-    sf::VertexBuffer vertexBuffer;
+    std::map<int, std::vector<sf::Vertex>> slices; // Vertices par profondeur CPU
+    std::map<int, sf::VertexBuffer> layerBuffers; // GPU buffers par profondeur
+    std::vector<sf::Vertex> vertices;//Pour rendre le chunk rapidement
+    sf::VertexBuffer vertexBuffer;//Buffer GPU pour rendu rapide
+    //Positions du chunk dans la grille de chunks
     int chunkX, chunkY;
 
-    Chunk() = default;
-
+    //Constructeur du Chunk
     Chunk(int cx, int cy, int tileW, int tileH, Map& carte) ;
 
-    // Helper pour ajouter un "cube/tuile" visuel au vecteur de vertices
+    //Différentes méthodes pour gérer le chunk
+    // Méthode pour ajouter un bloc au chunk
     void addBlock(float worldX, float worldY, int zLevel, const sf::Color& color);
-
-    // Helper pour générer un arbre à une position donnée
+    // Méthode pour générer un arbre à une position donnée
     void generateTree(int worldX, int worldY, int zGroundLevel);
+    // Méthode pour construire les buffers GPU à partir des vertices CPU
+    void buildBuffers();
+    void buildFastBuffer();
 
-    void draw(sf::RenderTarget& target, sf::RenderStates states) const;
+    // Méthode pour dessiner une couche spécifique du chunk
+    void drawLayer(sf::RenderTarget& target, sf::RenderStates states, int localDepth, int globalDepth, int playerDepth = 0, sf::Vector2f playerPos = sf::Vector2f()) const;
+
+    // Méthode pour le rendu rapide (sans tri par profondeur)
+    void drawFast(sf::RenderTarget& target, sf::RenderStates states) const;
+    
+    //Méthode pour overlay intelligent
+    sf::FloatRect getBlockBounds(int worldX, int worldY, int zLevel) const;
+
+    // Méthode pour calculer overlap entre deux rectangles
+    static float calculateOverlap(const sf::FloatRect& block, const sf::FloatRect& player);
 };
 
 #endif //CHUNK_HPP

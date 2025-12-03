@@ -19,4 +19,5 @@ sf::Vector2f isoToScreen(int x, int y, int z,int tileWidth, int tileHeight, unsi
 sf::Vector2i isoToCartesian (int worldX, int worldY, int tileWidth, int tileHeight);
 //fonction pour generer un nombre aleatoire entre 0 et 1
 float randomHash(int x, int y);
+sf::FloatRect getPlayerBounds(sf::Vector2f playerPos);
 #endif // UTILITAIRES_HPP
