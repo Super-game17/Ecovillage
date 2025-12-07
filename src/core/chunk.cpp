@@ -1,5 +1,6 @@
 #include "chunk.hpp"
 #include "map.hpp"
+#include "entity.hpp"
 
 
 void Chunk::addBlock(float worldX, float worldY, int zLevel, const sf::Color& color) {
@@ -40,7 +41,7 @@ void Chunk::addBlock(float worldX, float worldY, int zLevel, const sf::Color& co
 
     for (int i = 0; i < 6; i++) vertices.push_back(v[i]);
 
-    // Au lieu de vertices.push_back(...), on ajoute à la slice correspondante
+    // Au lieu de vertices.push_back(...), on ajoute à la slice correspondante pour la profondeur
     for (int i = 0; i < 6; i++) {
         slices[depthIndex].push_back(v[i]);
     }
@@ -177,21 +178,20 @@ void::Chunk::drawFast(sf::RenderTarget& target, sf::RenderStates states) const {
     target.draw(vertexBuffer, states);
 }
 
-void Chunk::drawLayer(sf::RenderTarget& target, sf::RenderStates states, int localDepth, int globalDepth, int playerDepth, sf::Vector2f playerPos) const {
+void Chunk::drawLayer(sf::RenderTarget& target, sf::RenderStates states, int localDepth, int globalDepth,const Entity* player) const {
     
     // Récupérer le buffer GPU pour cette couche
     auto it = layerBuffers.find(localDepth);
     // Si pas de buffer pour cette couche, rien à dessiner
     if (it == layerBuffers.end()) return;
     
-    if (playerDepth == 0) {
+    if (player == nullptr) {
         // Pas de joueur spécifié, dessiner normalement
         target.draw(it->second, states);
         return;
     }
-    // Simple heuristic: Only do expensive CPU transparency if globalDepth is close to playerDepth
-    // AND we are in a layer that is physically capable of hiding the player.
-    bool checkTransparency = (globalDepth > playerDepth) && (globalDepth < playerDepth + 10);
+    // Simple verification : on fait le check seulement pour les blocs capables de cacher le joueur
+    bool checkTransparency = (globalDepth > player->getDepth()) && (globalDepth < player->getDepth() + 10);
 
     if (!checkTransparency) {
         // Dessiner directement depuis le buffer GPU
@@ -201,11 +201,11 @@ void Chunk::drawLayer(sf::RenderTarget& target, sf::RenderStates states, int loc
     // On doit dessiner avec transparence les blocs qui couvrent >70% du joueur
     auto sliceIt = slices.find(localDepth);
     
-    // COPYING VERTICES IS EXPENSIVE. Only do it if we really need to.
-    // We can do a quick bounds check on the whole layer vs player before copying.
+    //Calculs d'overlay intelligent on va modifier les couleurs des vertices avant de dessiner
+    //mais cette operation est lourde pour donc on le fait uniquement si necessaire
     
     std::vector<sf::Vertex> modifiedVertices = sliceIt->second;
-    sf::FloatRect playerBounds = getPlayerBounds(playerPos);
+    sf::FloatRect playerBounds = player->shape.getGlobalBounds();
     
     bool modified = false;
 
@@ -224,17 +224,17 @@ void Chunk::drawLayer(sf::RenderTarget& target, sf::RenderStates states, int loc
         float maxY = std::max({modifiedVertices[i].position.y, modifiedVertices[i+1].position.y, 
                                 modifiedVertices[i+2].position.y, modifiedVertices[i+3].position.y,
                                 modifiedVertices[i+4].position.y, modifiedVertices[i+5].position.y});
-        
+        // Créer le rectangle du bloc
         sf::FloatRect blockBounds({minX, minY}, {maxX - minX, maxY - minY});
         
-
+        // Calculer l'overlap avec le joueur
         float overlap = calculateOverlap(blockBounds, playerBounds);
         
         // Appliquer transparence si overlap > 70%
         if (overlap > 0.7f) {
             modified = true;
             for (size_t j = i; j < i + 6; ++j) {
-                modifiedVertices[j].color.a = 128; // 50% transparent
+                modifiedVertices[j].color.a = 128; // 50% transparent, on modifie l'alpha
             }
         }
     }

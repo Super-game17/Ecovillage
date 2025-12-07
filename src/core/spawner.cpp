@@ -2,54 +2,17 @@
 #include "utilitaires.hpp"
 #include <iostream>
 #include <cstdlib>
+#include <algorithm>
 
-EntitySpawner::EntitySpawner() {
-    // Constructeur par défaut, les valeurs sont déjà initialisées
-    // keepRadius peut suivre spawnRadius + 1 si besoin
-}
-
-ChunkKey EntitySpawner::getChunkKey(int gridX, int gridY) const {
-    // Conversion des coordonnées de grille en coordonnées de chunk
-    // En supposant que CHUNK_SIZE = 16 (ajustez selon votre Map)
-    const int CHUNK_SIZE = 16;
-    return ChunkKey{gridX / CHUNK_SIZE, gridY / CHUNK_SIZE};
-}
-
-bool EntitySpawner::canSpawnInChunk(const ChunkKey& chunk, EntityType type) const {
-    auto it = chunkStats.find(chunk);
-    if (it == chunkStats.end()) {
-        return true; // Chunk vide, on peut spawn
-    }
-    
-    const ChunkEntityStats& stats = it->second;
-    
-    // Vérifier le total
-    if (stats.getTotalCount() >= maxTotalPerChunk) {
-        return false;
-    }
-    
-    // Vérifier selon le type
-    switch(type) {
-        case EntityType::PREY:
-            return stats.preyCount < maxPreyPerChunk;
-        case EntityType::PREDATOR:
-            return stats.predatorCount < maxPredatorPerChunk;
-        case EntityType::FOOD:
-            return stats.foodCount < maxFoodPerChunk;
-        default:
-            return true;
-    }
-}
+EntitySpawner::EntitySpawner() = default;
 
 void EntitySpawner::updateChunkStats(const std::vector<Entity*>& entities) {
-    // Réinitialiser les stats
     chunkStats.clear();
     
-    // Compter les entités par chunk
     for (const Entity* e : entities) {
         if (!e->isAlive) continue;
         
-        ChunkKey chunk = getChunkKey(e->gridX, e->gridY);
+        ChunkCoord chunk(e->gridX / Chunk::SIZE, e->gridY / Chunk::SIZE);
         ChunkEntityStats& stats = chunkStats[chunk];
         
         switch(e->type) {
@@ -68,14 +31,19 @@ void EntitySpawner::updateChunkStats(const std::vector<Entity*>& entities) {
     }
 }
 
-bool EntitySpawner::findFreePosition(const Map& map, int chunkX, int chunkY, int& outX, int& outY, int maxAttempts) {
-    const int CHUNK_SIZE = 16;
-    int baseX = chunkX * CHUNK_SIZE;
-    int baseY = chunkY * CHUNK_SIZE;
+bool EntitySpawner::findFreePosition(const Map& map, const Chunk* chunk, int& outX, int& outY, int maxAttempts) {
+    if (!chunk) {
+        outX = 0;
+        outY = 0;
+        return false;
+    }
+    
+    int baseX = chunk->chunkX * Chunk::SIZE;
+    int baseY = chunk->chunkY * Chunk::SIZE;
     
     for (int attempt = 0; attempt < maxAttempts; attempt++) {
-        int x = baseX + (rand() % CHUNK_SIZE);
-        int y = baseY + (rand() % CHUNK_SIZE);
+        int x = baseX + (rand() % Chunk::SIZE);
+        int y = baseY + (rand() % Chunk::SIZE);
         
         if (!map.isObstacle(x, y) && !map.isWater(x, y)) {
             outX = x;
@@ -84,137 +52,135 @@ bool EntitySpawner::findFreePosition(const Map& map, int chunkX, int chunkY, int
         }
     }
     
+    outX = baseX + (Chunk::SIZE / 2);
+    outY = baseY + (Chunk::SIZE / 2);
     return false;
 }
 
-void EntitySpawner::update(float deltaTime, std::vector<Entity*>& entities, const Map& map, const sf::Vector2f& cameraCenter,
-                           const Entity* pinA, const Entity* pinB) {
-    // Mettre à jour les statistiques
+void EntitySpawner::update(float deltaTime, std::vector<Entity*>& entities, const Map& map,
+                           const Entity* pinA, sf::Texture* deerTexture, sf::Texture* bearTexture) {
+    
+    // Nettoyer les morts
+    for (size_t i = 0; i < entities.size();) {
+        if (!entities[i]->isAlive && entities[i] != pinA) {
+            delete entities[i];
+            entities.erase(entities.begin() + i);
+            continue;
+        }
+        ++i;
+    }
+    
+    // Mettre à jour les stats une seule fois
     updateChunkStats(entities);
-
-    // Calculer le chunk central (caméra)
-    int cameraTileX = static_cast<int>(cameraCenter.x / 100); // tileWidth = 100
-    int cameraTileY = static_cast<int>(cameraCenter.y / 50); // tileHeight = 50
-    ChunkKey centerChunk = getChunkKey(cameraTileX, cameraTileY);
-
-    // Ajuster dynamiquement le keepRadius au moins à la distance de rendu
-    int effectiveKeepRadius = std::max(keepRadius, map.renderDistance + 1);
-
+    
+    // COMPTER LES ENTITÉS GLOBALES
+    int globalPreyCount = 0;
+    int globalPredCount = 0;
+    int globalFoodCount = 0;
+    int globalTotalCount = 0;
+    
+    for (const auto& [chunk, stats] : chunkStats) {
+        globalPreyCount += stats.preyCount;
+        globalPredCount += stats.predatorCount;
+        globalFoodCount += stats.foodCount;
+    }
+    globalTotalCount = globalPreyCount + globalPredCount + globalFoodCount;
+    
     // Mettre à jour les timers
     preySpawnTimer += deltaTime;
     predatorSpawnTimer += deltaTime;
     foodSpawnTimer += deltaTime;
 
-    // --- SPAWN PREY ---
-    if (preySpawnTimer >= preySpawnInterval) {
-        preySpawnTimer = 0.f;
+    // === SPAWN DANS LES CHUNKS VISIBLES ===
+    // On utilise map.chunksToRender qui contient déjà les chunks à rendre autour de la caméra
+    for (const Chunk* chunk : map.chunksToRender) {
+        if (!chunk) continue;
         
-        // Essayer de spawn dans les chunks autour de la caméra
-        for (int dx = -spawnRadius; dx <= spawnRadius; dx++) {
-            for (int dy = -spawnRadius; dy <= spawnRadius; dy++) {
-                ChunkKey targetChunk{centerChunk.x + dx, centerChunk.y + dy};
-                if (canSpawnInChunk(targetChunk, EntityType::PREY)) {
-                    int spawnX, spawnY;
-                    if (findFreePosition(map, targetChunk.x, targetChunk.y, spawnX, spawnY)) {
-                        Prey* p = new Prey(spawnX, spawnY);
-                        p->updateVisualPosition(map);
-                        entities.push_back(p);
-                        
-                        // Mettre à jour les stats immédiatement
-                        chunkStats[targetChunk].preyCount++;
-                        
-                        // Une seule proie par cycle
-                        goto prey_spawned;
-                    }
-                }
+        ChunkCoord coord(chunk->chunkX, chunk->chunkY);
+        ChunkEntityStats& stats = chunkStats[coord];
+
+        // --- SPAWN PREY ---
+        if (preySpawnTimer >= preySpawnInterval && 
+            stats.preyCount < maxPreyPerChunk &&
+            globalPreyCount < maxTotalPrey &&
+            globalTotalCount < maxTotalEntities) {
+            
+            int spawnX = 0, spawnY = 0;
+            if (findFreePosition(map, chunk, spawnX, spawnY)) {
+                auto* p = new Prey(spawnX, spawnY, deerTexture);
+                p->updateVisualPosition(map);
+                entities.push_back(p);
+                stats.preyCount++;
+                globalPreyCount++;
+                globalTotalCount++;
             }
         }
-        prey_spawned:;
-    }
 
-    // --- SPAWN PREDATOR ---
-    if (predatorSpawnTimer >= predatorSpawnInterval) {
-        predatorSpawnTimer = 0.f;
-        for (int dx = -spawnRadius; dx <= spawnRadius; dx++) {
-            for (int dy = -spawnRadius; dy <= spawnRadius; dy++) {
-                ChunkKey targetChunk{centerChunk.x + dx, centerChunk.y + dy};
-                if (canSpawnInChunk(targetChunk, EntityType::PREDATOR)) {
-                    int spawnX, spawnY;
-                    if (findFreePosition(map, targetChunk.x, targetChunk.y, spawnX, spawnY)) {
-                        Predator* p = new Predator(spawnX, spawnY);
-                        p->updateVisualPosition(map);
-                        entities.push_back(p);
-                        chunkStats[targetChunk].predatorCount++;
-                        goto predator_spawned;
-                    }
-                }
+        // --- SPAWN PREDATOR ---
+        if (predatorSpawnTimer >= predatorSpawnInterval && 
+            stats.predatorCount < maxPredatorPerChunk &&
+            globalPredCount < maxTotalPredators &&
+            globalTotalCount < maxTotalEntities) {
+            
+            int spawnX = 0, spawnY = 0;
+            if (findFreePosition(map, chunk, spawnX, spawnY)) {
+                auto* p = new Predator(spawnX, spawnY, bearTexture);
+                p->updateVisualPosition(map);
+                entities.push_back(p);
+                stats.predatorCount++;
+                globalPredCount++;
+                globalTotalCount++;
             }
         }
-        predator_spawned:;
-    }
 
-    // --- SPAWN FOOD ---
-    if (foodSpawnTimer >= foodSpawnInterval) {
-        foodSpawnTimer = 0.f;
-        
-        // Spawn multiple food items
-        int foodToSpawn = 3; // Nombre de nourriture à spawn par cycle
-        for (int i = 0; i < foodToSpawn; i++) {
-            for (int dx = -spawnRadius; dx <= spawnRadius; dx++) {
-                for (int dy = -spawnRadius; dy <= spawnRadius; dy++) {
-                    ChunkKey targetChunk{centerChunk.x + dx, centerChunk.y + dy};
-                    if (canSpawnInChunk(targetChunk, EntityType::FOOD)) {
-                        int spawnX, spawnY;
-                        if (findFreePosition(map, targetChunk.x, targetChunk.y, spawnX, spawnY)) {
-                            Food* f = new Food(spawnX, spawnY);
-                            f->updateVisualPosition(map);
-                            entities.push_back(f);
-                            chunkStats[targetChunk].foodCount++;
-                            goto next_food;
-                        }
-                    }
-                }
+        // --- SPAWN FOOD ---
+        if (foodSpawnTimer >= foodSpawnInterval && 
+            stats.foodCount < maxFoodPerChunk &&
+            globalFoodCount < maxTotalFood &&
+            globalTotalCount < maxTotalEntities) {
+            
+            int spawnX = 0, spawnY = 0;
+            if (findFreePosition(map, chunk, spawnX, spawnY)) {
+                auto* f = new Food(spawnX, spawnY);
+                f->updateVisualPosition(map);
+                entities.push_back(f);
+                stats.foodCount++;
+                globalFoodCount++;
+                globalTotalCount++;
             }
-            next_food:;
         }
     }
 
-    // DESPAWN: supprimer ce qui est hors du rayon de conservation
-    // Utilise effectiveKeepRadius (>= renderDistance + 1)
-    {
-        // Truc simple: désactiver temporairement keepRadius avec effectiveKeepRadius local
-        // et passer à la fonction utilitaire
-        int savedKeep = keepRadius;
-        keepRadius = effectiveKeepRadius;
-        despawnFarEntities(entities, centerChunk, map, pinA, pinB);
-        keepRadius = savedKeep;
-    }
+    // Reset timers
+    if (preySpawnTimer >= preySpawnInterval) preySpawnTimer = 0.f;
+    if (predatorSpawnTimer >= predatorSpawnInterval) predatorSpawnTimer = 0.f;
+    if (foodSpawnTimer >= foodSpawnInterval) foodSpawnTimer = 0.f;
 
+    // === DESPAWN LES ENTITÉS LOINTAINES ===
+    despawnFarEntities(entities, map.chunks.empty() ? ChunkCoord(0, 0) : 
+        ChunkCoord(map.lastCenterChunkX, map.lastCenterChunkY), pinA);
+    
     // Recalculer les stats après spawn/despawn
     updateChunkStats(entities);
 }
 
-void EntitySpawner::despawnFarEntities(std::vector<Entity*>& entities, const ChunkKey& centerChunk, const Map& map,
-                                       const Entity* pinA, const Entity* pinB) {
-    auto isPinned = [&](const Entity* e) {
-        return (e == pinA) || (e == pinB);
-    };
-
+void EntitySpawner::despawnFarEntities(std::vector<Entity*>& entities, const ChunkCoord& centerChunk, const Entity* pinA) {
     for (size_t i = 0; i < entities.size();) {
         Entity* e = entities[i];
-        if (!e->isAlive) {
-            delete e;
-            entities.erase(entities.begin() + i);
-            continue;
-        }
-
-        ChunkKey eChunk = getChunkKey(e->gridX, e->gridY);
+        
+        if (e == pinA) { ++i; continue; }
+        
+        ChunkCoord eChunk(e->gridX / Chunk::SIZE, e->gridY / Chunk::SIZE);
         int dx = std::abs(eChunk.x - centerChunk.x);
         int dy = std::abs(eChunk.y - centerChunk.y);
 
-        if ((dx > keepRadius || dy > keepRadius) && !isPinned(e)) {
+        // Despawn si au-delà du rayon de conservation
+        if (std::max(dx, dy) > keepRadius) {
+            int despawnX = e->gridX;
+            int despawnY = e->gridY;
             delete e;
             entities.erase(entities.begin() + i);
+            std::cout << "Entity despawned at (" << despawnX << ", " << despawnY << ")\n";
             continue;
         }
 
@@ -222,69 +188,47 @@ void EntitySpawner::despawnFarEntities(std::vector<Entity*>& entities, const Chu
     }
 }
 
-void EntitySpawner::updateFoodOnly(float deltaTime, std::vector<Entity*>& entities, const Map& map, const sf::Vector2f& cameraCenter) {
-    // Mettre à jour les statistiques
+void EntitySpawner::updateFoodOnly(float deltaTime, std::vector<Entity*>& entities, const Map& map) {
     updateChunkStats(entities);
-
-    // Calculer le chunk central (caméra)
-    int cameraTileX = static_cast<int>(cameraCenter.x/100);
-    int cameraTileY = static_cast<int>(cameraCenter.y/50);
-    ChunkKey centerChunk = getChunkKey(cameraTileX, cameraTileY);
-
-    // Mettre à jour le timer de nourriture
     foodSpawnTimer += deltaTime;
 
-    // --- SPAWN FOOD UNIQUEMENT ---
     if (foodSpawnTimer >= foodSpawnInterval) {
         foodSpawnTimer = 0.f;
         
-        // Spawn multiple food items
-        int foodToSpawn = 5; // Plus de nourriture en mode simulation
-        for (int i = 0; i < foodToSpawn; i++) {
-            for (int dx = -spawnRadius; dx <= spawnRadius; dx++) {
-                for (int dy = -spawnRadius; dy <= spawnRadius; dy++) {
-                    ChunkKey targetChunk{centerChunk.x + dx, centerChunk.y + dy};
-                    if (canSpawnInChunk(targetChunk, EntityType::FOOD)) {
-                        int spawnX, spawnY;
-                        if (findFreePosition(map, targetChunk.x, targetChunk.y, spawnX, spawnY)) {
-                            Food* f = new Food(spawnX, spawnY);
-                            f->updateVisualPosition(map);
-                            entities.push_back(f);
-                            chunkStats[targetChunk].foodCount++;
-                            goto next_food;
-                        }
-                    }
+        for (const Chunk* chunk : map.chunksToRender) {
+            if (!chunk) continue;
+            
+            ChunkCoord coord(chunk->chunkX, chunk->chunkY);
+            ChunkEntityStats& stats = chunkStats[coord];
+
+            if (stats.foodCount < maxFoodPerChunk) {
+                int spawnX = 0, spawnY = 0;
+                if (findFreePosition(map, chunk, spawnX, spawnY)) {
+                    auto* f = new Food(spawnX, spawnY);
+                    f->updateVisualPosition(map);
+                    entities.push_back(f);
+                    stats.foodCount++;
                 }
             }
-            next_food:;
         }
     }
 
-    // Nettoyer les entités mortes (nourriture mangée)
+    // Nettoyer les morts
     for (size_t i = 0; i < entities.size();) {
-        Entity* e = entities[i];
-        if (!e->isAlive) {
-            delete e;
+        if (!entities[i]->isAlive) {
+            delete entities[i];
             entities.erase(entities.begin() + i);
             continue;
         }
         ++i;
     }
 
-    // Recalculer les stats après spawn
     updateChunkStats(entities);
 }
 
-void EntitySpawner::clearChunkStats(const ChunkKey& chunk) {
-    chunkStats.erase(chunk);
-}
-
-ChunkEntityStats EntitySpawner::getChunkStats(const ChunkKey& chunk) const {
+ChunkEntityStats EntitySpawner::getChunkStats(const ChunkCoord& chunk) const {
     auto it = chunkStats.find(chunk);
-    if (it != chunkStats.end()) {
-        return it->second;
-    }
-    return ChunkEntityStats();
+    return (it != chunkStats.end()) ? it->second : ChunkEntityStats();
 }
 
 void EntitySpawner::printStats() const {

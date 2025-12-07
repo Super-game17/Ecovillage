@@ -29,6 +29,8 @@ private:
     GameConfig config;
     EntitySpawner spawner; 
     sf::Texture textureBlocks;
+    sf::Texture deerText;
+    sf::Texture bearText;
     sf::Clock gameClock;
 
     GameState currentState = GameState::MENU;
@@ -67,6 +69,8 @@ private:
     void handleEvents();
     void update(float deltaTime);
     void render();
+    // --- Fonction de Spawn Initial ---
+    void spawnInitialEntities(int preyCount, int predCount, int spawnRadius);
 };
 
 #endif // GAME_HPP

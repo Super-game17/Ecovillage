@@ -1,28 +1,9 @@
 #pragma once
 #include <SFML/Graphics.hpp>
-#include <unordered_map>
+#include <map>
 #include <vector>
 #include "entity.hpp"
 #include "map.hpp"
-
-// Structure pour identifier un chunk
-struct ChunkKey {
-    int x, y;
-    
-    bool operator==(const ChunkKey& other) const {
-        return x == other.x && y == other.y;
-    }
-};
-
-// Hash pour ChunkKey
-namespace std {
-    template<>
-    struct hash<ChunkKey> {
-        size_t operator()(const ChunkKey& k) const {
-            return hash<int>()(k.x) ^ (hash<int>()(k.y) << 1);
-        }
-    };
-}
 
 // Statistiques d'entités par chunk
 struct ChunkEntityStats {
@@ -37,14 +18,22 @@ struct ChunkEntityStats {
 
 class EntitySpawner {
 private:
+
+    // Limites GLOBALES (en plus des limites par chunk)
+    int maxTotalEntities = 500;      // Limite totale d'entités
+    int maxTotalPrey = 200;          // Limite totale de proies
+    int maxTotalPredators = 50;      // Limite totale de prédateurs
+    int maxTotalFood = 300;          // Limite totale de nourriture
+
+
     // Limites par chunk
-    int maxPreyPerChunk = 8;
-    int maxPredatorPerChunk = 3;
-    int maxFoodPerChunk = 15;
+    int maxPreyPerChunk = 4;
+    int maxPredatorPerChunk = 2;
+    int maxFoodPerChunk = 12;
     int maxTotalPerChunk = 20;
     
     // Statistiques par chunk
-    std::unordered_map<ChunkKey, ChunkEntityStats> chunkStats;
+    std::map<ChunkCoord, ChunkEntityStats> chunkStats; // ChunkCoord au lieu de ChunkKey
     
     // Timers de spawn
     float preySpawnTimer = 0.f;
@@ -52,30 +41,28 @@ private:
     float foodSpawnTimer = 0.f;
     
     // Intervalles de spawn (secondes)
-    float preySpawnInterval = 5.0f;
-    float predatorSpawnInterval = 10.0f;
-    float foodSpawnInterval = 2.0f;
+    float preySpawnInterval = 15.0f;
+    float predatorSpawnInterval = 30.0f;
+    float foodSpawnInterval = 20.0f;
     
     // Distance de spawn autour de la caméra (en chunks)
     int spawnRadius = 3;
     int keepRadius = 5; // rayon de conservation; au-delà on despawn
 
+
     // Méthodes privées
-    ChunkKey getChunkKey(int gridX, int gridY) const;
-    bool canSpawnInChunk(const ChunkKey& chunk, EntityType type) const;
+    
     void updateChunkStats(const std::vector<Entity*>& entities);
-    bool findFreePosition(const Map& map, int chunkX, int chunkY, int& outX, int& outY, int maxAttempts = 10);
-    void despawnFarEntities(std::vector<Entity*>& entities, const ChunkKey& centerChunk, const Map& map,
-                            const Entity* pinA, const Entity* pinB);
+    bool findFreePosition(const Map& map, const Chunk* chunk, int& outX, int& outY, int maxAttempts = 20);
+    void despawnFarEntities(std::vector<Entity*>& entities, const ChunkCoord& centerChunk, const Entity* pinA);
 
 public:
     EntitySpawner();
-    // Mise à jour avec épingles pour ne pas despawn la sélection/contrôle
-    void update(float deltaTime, std::vector<Entity*>& entities, const Map& map, const sf::Vector2f& cameraCenter,
-                const Entity* pinA = nullptr, const Entity* pinB = nullptr);
+    
+    void update(float deltaTime, std::vector<Entity*>& entities, const Map& map,
+                const Entity* pinA = nullptr, sf::Texture* deerTexture = nullptr, sf::Texture* bearTexture = nullptr);
 
-    // Nettoyage des stats pour un chunk
-    void clearChunkStats(const ChunkKey& chunk);
+    void updateFoodOnly(float deltaTime, std::vector<Entity*>& entities, const Map& map);
     
     // Getters/Setters pour les limites
     void setMaxPreyPerChunk(int max) { maxPreyPerChunk = max; }
@@ -84,19 +71,13 @@ public:
     void setMaxTotalPerChunk(int max) { maxTotalPerChunk = max; }
     void setSpawnRadius(int radius) { spawnRadius = radius; }
     void setKeepRadius(int radius) { keepRadius = radius; }
-    int getMaxPreyPerChunk() const { return maxPreyPerChunk; }
-    int getMaxPredatorPerChunk() const { return maxPredatorPerChunk; }
-    int getMaxFoodPerChunk() const { return maxFoodPerChunk; }
-    int getMaxTotalPerChunk() const { return maxTotalPerChunk; }
-    int getSpawnRadius() const { return spawnRadius; }
-    int getKeepRadius() const { return keepRadius; }
     
-    // Obtenir les stats d'un chunk
-    ChunkEntityStats getChunkStats(const ChunkKey& chunk) const;
-    
-    // Debug: afficher les stats
-    void printStats() const;
-    // Mise à jour uniquement de la nourriture (pour mode simulation)
-    void updateFoodOnly(float deltaTime, std::vector<Entity*>& entities, const Map& map, const sf::Vector2f& cameraCenter);
+    // Setters pour les limites globales
+    void setMaxTotalEntities(int max) { maxTotalEntities = max; }
+    void setMaxTotalPrey(int max) { maxTotalPrey = max; }
+    void setMaxTotalPredators(int max) { maxTotalPredators = max; }
+    void setMaxTotalFood(int max) { maxTotalFood = max; }
 
+    ChunkEntityStats getChunkStats(const ChunkCoord& chunk) const;
+    void printStats() const;
 };

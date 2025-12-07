@@ -7,6 +7,7 @@
 
 
 class Map; // Déclaration anticipée
+class Entity; // Déclaration anticipée
 // Structure pour représenter les coordonnées d'un chunk par rapport à la grille de chunks
 struct ChunkCoord {
     int x, y;
@@ -23,11 +24,10 @@ struct ChunkCoord {
 class Chunk {
 public:
     //Initialisation des attributs de la classe Chunk
-    //std::vector<sf::Vertex> vertices; // Vertices CPU
     static constexpr int SIZE = 16;
     std::map<int, std::vector<sf::Vertex>> slices; // Vertices par profondeur CPU
     std::map<int, sf::VertexBuffer> layerBuffers; // GPU buffers par profondeur
-    std::vector<sf::Vertex> vertices;//Pour rendre le chunk rapidement
+    std::vector<sf::Vertex> vertices;//Pour rendre le chunk rapidement Vertices CPU
     sf::VertexBuffer vertexBuffer;//Buffer GPU pour rendu rapide
     //Positions du chunk dans la grille de chunks
     int chunkX, chunkY;
@@ -45,7 +45,7 @@ public:
     void buildFastBuffer();
 
     // Méthode pour dessiner une couche spécifique du chunk
-    void drawLayer(sf::RenderTarget& target, sf::RenderStates states, int localDepth, int globalDepth, int playerDepth = 0, sf::Vector2f playerPos = sf::Vector2f()) const;
+    void drawLayer(sf::RenderTarget& target, sf::RenderStates states, int localDepth, int globalDepth,const Entity* player = nullptr) const;
 
     // Méthode pour le rendu rapide (sans tri par profondeur)
     void drawFast(sf::RenderTarget& target, sf::RenderStates states) const;
