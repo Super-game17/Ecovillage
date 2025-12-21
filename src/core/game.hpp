@@ -49,7 +49,11 @@ private:
     // Widgets UI pour le jeu
     tgui::Label::Ptr statsLabel;
     tgui::Panel::Ptr perlinPanel;
+    tgui::Panel::Ptr spawnerPanel;
     bool showPerlinPanel = false;
+    bool showSpawnerPanel = false;
+
+
 
 
     // --- Fonctions de Sélection ---
@@ -64,6 +68,9 @@ private:
     void setupPerlinConfigPanel();  // Créer le panneau Perlin (mode Perlin Play uniquement)
     void applyPerlinConfig();       // Appliquer la config et recharger
     void togglePerlinPanel();       // Afficher/masquer le panneau Perlin
+    void setupSpawnerPanel();      // Créer le panneau Spawner (modes avec entités)
+    void applySpawnerConfig();      // Appliquer la config du spawner
+    void toggleSpawnerPanel();     // Afficher/masquer le panneau Spawner
     
     // --- Boucle Principale ---
     void handleEvents();

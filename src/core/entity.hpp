@@ -38,6 +38,22 @@ public:
     sf::Vector2f targetScreenPos;
     float speed = 10.0f;
 
+    // === ANIMATION DE DÉGÂTS ===
+    bool isDamaged = false;           // Est-ce que l'entité vient de prendre des dégâts ?
+    float damageFlashTimer = 0.f;     // Timer pour le clignotement
+    float damageFlashDuration = 0.4f; // Durée totale du clignotement (0.4 secondes)
+    sf::Color originalColor;          // Couleur originale pour revenir après
+    
+    // === ANIMATION DE MORT ===
+    bool isDying = false;             // En train de mourir (animation en cours)
+    float deathAnimTimer = 0.f;       // Timer pour l'animation de mort
+    float deathAnimDuration = 0.8f;   // Durée de l'animation (0.8 secondes)
+    
+    // Méthodes d'animation
+    void updateDamageAnimation(float deltaTime);
+    void updateDeathAnimation(float deltaTime);
+    void triggerDamageFlash(); // À appeler quand l'entité prend des dégâts
+
     Entity(int startX, int startY , EntityType t, sf::Texture *texture = nullptr) ;
 
     sf::Vector2i getPosition(){return sf::Vector2i(gridX, gridY);}
@@ -106,7 +122,7 @@ public:
 
     Prey(int x, int y, sf::Texture *texture = nullptr,
          float genHealth = 100.f, float genEnergy = 100.f, 
-         float genSpeed = 1.0f, float genHungerRate = 0.2f, float genVisionRadius = 9.0f);
+         float genSpeed = 1.0f, float genHungerRate = 1.0f, float genVisionRadius = 9.0f);
     
     // Méthode principale de l'IA
     void update(float deltaTime) override;

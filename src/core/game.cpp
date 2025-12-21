@@ -79,6 +79,11 @@ void Game::handleEvents() {
             if(keyPressed->scancode == sf::Keyboard::Scancode::F2 && currentState == GameState::PERLIN_PLAY){
                 togglePerlinPanel();
             }
+
+            // F2 : Toggle Perlin Config Panel (UNIQUEMENT en mode PERLIN_PLAY)
+            if(keyPressed->scancode == sf::Keyboard::Scancode::F2 && currentState != GameState::PERLIN_PLAY){
+                toggleSpawnerPanel();
+            }
             
             // --- SÉLECTION D'ENTITÉS (sauf en mode MENU et PERLIN_PLAY) ---
             if (currentState != GameState::MENU && currentState != GameState::PERLIN_PLAY) {
@@ -137,7 +142,11 @@ void Game::update(float deltaTime) {
             }
             e->update(deltaTime);
             if (Prey* p = dynamic_cast<Prey*>(e)) {
-                p->thinkAndAct(map, entities);
+                if(currentState == GameState::SURVIVAL_MODE && p->isSelected){
+                    // Le joueur contrôle cette proie
+                } else {
+                    p->thinkAndAct(map, entities);
+                }
             }
             else if (Predator* pr = dynamic_cast<Predator*>(e)) {
                 pr->thinkAndAct(map, entities);
@@ -305,7 +314,6 @@ void Game::startGame(GameState newState, MapMode mapMode) {
     
     // 2. Réinitialiser la carte et le bruit
     map.reset(mapMode, config.world);
-    map.renderDistance = config.renderDistance; // Récupérer la distance de rendu de la config
     map.update(camera.getCenter(), textureBlocks);
     // 3. Positionner la caméra au centre de la zone générée
     camera.setCenter({swidth/2.f, sheight/2.f}); 
@@ -360,7 +368,7 @@ void Game::setupSurvivalMode() {
     std::cout << "Mode Survival Démarré." << std::endl;
     
     // Créer le joueur au centre
-    Entity* player = new Entity(0, 0, EntityType::PLAYER, &deerText);
+    Prey* player = new Prey(0, 0, &deerText);
     player->shape.setFillColor(sf::Color(100, 180, 255));
     player->updateVisualPosition(map);
     entities.push_back(player);
@@ -447,7 +455,7 @@ void Game::setupMenu() {
     gui.add(panel, "MainPanel");
 
     // Titre
-    auto label = tgui::Label::create("Chunk System Modes");
+    auto label = tgui::Label::create("EcoVillage");
     label->setTextSize(36);
     label->setPosition({"center", 20});
     panel->add(label);
@@ -509,37 +517,55 @@ void Game::setupStatsLabel() {
     
     // Créer le panneau de configuration Perlin (masqué par défaut)
     setupPerlinConfigPanel();
+    setupSpawnerPanel();
 }
 
 void Game::updateStatsDisplay() {
     if (!statsLabel) return;
 
-    // Vérifier que selectedEntity est valide avant l'utiliser
+    // Vérifier si l'entité sélectionnée est toujours valide
     auto it = std::find(entities.begin(), entities.end(), selectedEntity);
     if (it == entities.end()) {
         selectedEntity = nullptr;
     }
+
+    // Comptages globaux
+    int preyCount = 0, predatorCount = 0, foodCount = 0;
+    for (const Entity* e : entities) {
+        switch (e->type) {
+            case EntityType::PREY:      ++preyCount; break;
+            case EntityType::PREDATOR:  ++predatorCount; break;
+            case EntityType::FOOD:      ++foodCount; break;
+            default: break;
+        }
+    }
+
     std::string text = "TAB: Sélection | SPACE: Déselection | F1: Stats console\n";
     text += "Entités: " + std::to_string(entities.size()) + "\n";
-    
+    text += "Proies: " + std::to_string(preyCount) +
+            " | Prédateurs: " + std::to_string(predatorCount) +
+            " | Nourriture: " + std::to_string(foodCount) + "\n";
+
     if (selectedEntity != nullptr && selectedEntity->type != EntityType::FOOD) {
         text += "\n--- ENTITÉ SÉLECTIONNÉE ---\n";
         text += selectedEntity->getStats();
     } else {
         text += "\nAucune entité sélectionnée";
     }
-    
+
     statsLabel->setText(text);
 }
 
 void Game::setupPerlinConfigPanel() {
+    // Panneau de configuration Perlin
     perlinPanel = tgui::Panel::create();
-    perlinPanel->setSize({"30%", "80%"});
-    perlinPanel->setPosition({"35%", "10%"});
+    perlinPanel->setSize({"40%", "100%"});
+    perlinPanel->setPosition({"35%", "5%"});
     perlinPanel->getRenderer()->setBackgroundColor(tgui::Color(40, 40, 40, 230));
     perlinPanel->setVisible(false);
     gui.add(perlinPanel, "PerlinPanel");
     
+    // Espacement des éléments
     float yPos = 10.f;
     float spacing = 50.f;
     
@@ -665,9 +691,26 @@ void Game::setupPerlinConfigPanel() {
     perlinPanel->add(contSlider);
     yPos += spacing;
     
-    // Boutons
+    // Height Scale
+    auto heightLabel = tgui::Label::create("Height Scale: " + std::to_string(config.world.heightScale));
+    heightLabel->setPosition({10, yPos});
+    heightLabel->getRenderer()->setTextColor(tgui::Color::White);
+    perlinPanel->add(heightLabel, "HeightLabel");
     yPos += 20;
     
+    auto heightSlider = tgui::Slider::create(10.0f, 200.0f);
+    heightSlider->setSize({"80%", 20});
+    heightSlider->setPosition({"center", yPos});
+    heightSlider->getRenderer()->setBorderColor(tgui::Color::White);
+    heightSlider->setValue(config.world.heightScale);
+    heightSlider->onValueChange([this, heightLabel](float value) {
+        config.world.heightScale = value;
+        heightLabel->setText("Height Scale: " + std::to_string(config.world.heightScale));
+    });
+    perlinPanel->add(heightSlider);
+    yPos += spacing;
+
+    // Boutons
     auto applyBtn = tgui::Button::create("Appliquer (Recharger Carte)");
     applyBtn->setSize({"80%", 40});
     applyBtn->setPosition({"center", yPos});
@@ -716,4 +759,119 @@ void Game::togglePerlinPanel() {
     perlinPanel->setVisible(showPerlinPanel);
     
     std::cout << (showPerlinPanel ? "Panneau Perlin affiché" : "Panneau Perlin masqué") << std::endl;
+}
+
+
+void Game::toggleSpawnerPanel() {
+    if (!spawnerPanel) return;
+    
+    showSpawnerPanel = !showSpawnerPanel;
+    spawnerPanel->setVisible(showSpawnerPanel);
+    
+    std::cout << (showSpawnerPanel ? "Panneau Spawner affiché" : "Panneau Spawner masqué") << std::endl;
+}
+
+void Game::setupSpawnerPanel() {
+    spawnerPanel = tgui::Panel::create();
+    spawnerPanel->setSize({"30%", "60%"});
+    spawnerPanel->setPosition({"35%", "20%"});
+    spawnerPanel->getRenderer()->setBackgroundColor(tgui::Color(40, 40, 40, 230));
+    spawnerPanel->setVisible(false);
+    gui.add(spawnerPanel, "SpawnerPanel");
+
+    float yPos = 10.f;
+    float spacing = 50.f;
+
+    //Titre
+    auto title = tgui::Label::create("Configuration Spawner");
+    title->setTextSize(20);
+    title->setPosition({"center", yPos});
+    title->getRenderer()->setTextColor(tgui::Color::White);
+    spawnerPanel->add(title);
+    yPos += 40;
+
+    //Maximum d'entités
+    auto maxEntityLabel = tgui::Label::create("Max Entités: " + std::to_string(spawner.getMaxTotalEntities()));
+    maxEntityLabel->setPosition({10, yPos});
+    maxEntityLabel->getRenderer()->setTextColor(tgui::Color::White);
+    spawnerPanel->add(maxEntityLabel, "MaxEntityLabel");
+    yPos+=20;
+
+    auto maxEntitySlider = tgui::Slider::create(0,3000);
+    maxEntitySlider->setSize({"80%", 20});
+    maxEntitySlider->setPosition({"center", yPos});
+    maxEntitySlider->getRenderer()->setBorderColor(tgui::Color::White);
+    maxEntitySlider->setValue(static_cast<float>(spawner.getMaxTotalEntities()));
+    maxEntitySlider->onValueChange([this, maxEntityLabel](float value) {
+        spawner.setMaxTotalEntities(static_cast<int>(value));
+        maxEntityLabel->setText("Max Entités: " + std::to_string(spawner.getMaxTotalEntities()));
+    });
+    spawnerPanel->add(maxEntitySlider);
+    yPos += spacing;
+
+    //Maximum proies
+    auto maxPreyLabel = tgui::Label::create("Max Proies: " + std::to_string(spawner.getMaxTotalPrey()));
+    maxPreyLabel->setPosition({10, yPos});
+    maxPreyLabel->getRenderer()->setTextColor(tgui::Color::White);
+    spawnerPanel->add(maxPreyLabel, "MaxPreyLabel");
+    yPos += 20;
+
+    auto maxPreySlider = tgui::Slider::create(0,1000);
+    maxPreySlider->setSize({"80%", 20});
+    maxPreySlider->setPosition({"center", yPos});
+    maxPreySlider->getRenderer()->setBorderColor(tgui::Color::White);
+    maxPreySlider->setValue(static_cast<float>(spawner.getMaxTotalPrey()));
+    maxPreySlider->onValueChange([this, maxPreyLabel](float value) {
+        spawner.setMaxTotalPrey(static_cast<int>(value));
+        maxPreyLabel->setText("Max Proies: " + std::to_string(spawner.getMaxTotalPrey()));
+    });
+    spawnerPanel->add(maxPreySlider);
+    yPos += spacing;
+
+    //Maximum prédateurs
+    auto maxPredatorLabel = tgui::Label::create("Max Prédateurs: " + std::to_string(spawner.getMaxTotalPredators()));
+    maxPredatorLabel->setPosition({10, yPos});
+    maxPredatorLabel->getRenderer()->setTextColor(tgui::Color::White);
+    spawnerPanel->add(maxPredatorLabel, "MaxPredatorLabel");
+    yPos += 20;
+
+    auto maxPredatorSlider = tgui::Slider::create(0,1000);
+    maxPredatorSlider->setSize({"80%", 20});
+    maxPredatorSlider->setPosition({"center", yPos});
+    maxPredatorSlider->getRenderer()->setBorderColor(tgui::Color::White);
+    maxPredatorSlider->setValue(static_cast<float>(spawner.getMaxTotalPredators()));
+    maxPredatorSlider->onValueChange([this, maxPredatorLabel](float value) {
+        spawner.setMaxTotalPredators(static_cast<int>(value));
+        maxPredatorLabel->setText("Max Prédateurs: " + std::to_string(spawner.getMaxTotalPredators()));
+    });
+    spawnerPanel->add(maxPredatorSlider);
+    yPos += spacing;
+
+    //Maximum nourriture
+    auto maxFoodLabel = tgui::Label::create("Max Nourriture: " + std::to_string(spawner.getMaxTotalFood()));
+    maxFoodLabel->setPosition({10, yPos});
+    maxFoodLabel->getRenderer()->setTextColor(tgui::Color::White);
+    spawnerPanel->add(maxFoodLabel, "MaxFoodLabel");
+    yPos += 20;
+
+    auto maxFoodSlider = tgui::Slider::create(0,1000);
+    maxFoodSlider->setSize({"80%", 20});
+    maxFoodSlider->setPosition({"center", yPos});
+    maxFoodSlider->getRenderer()->setBorderColor(tgui::Color::White);
+    maxFoodSlider->setValue(static_cast<float>(spawner.getMaxTotalFood()));
+    maxFoodSlider->onValueChange([this, maxFoodLabel](float value) {
+        spawner.setMaxTotalFood(static_cast<int>(value));
+        maxFoodLabel->setText("Max Nourriture: " + std::to_string(spawner.getMaxTotalFood()));
+    });
+    spawnerPanel->add(maxFoodSlider);
+    yPos += spacing;
+    
+     // Boutons
+    yPos += 20;
+    
+    auto despawnBtn = tgui::Button::create("Despawner Toutes les Entités");
+    despawnBtn->setSize({"80%", 40});
+    despawnBtn->setPosition({"center", yPos});
+    despawnBtn->onClick([this]() { spawner.despawnAllEntities(entities); });
+    spawnerPanel->add(despawnBtn);
 }

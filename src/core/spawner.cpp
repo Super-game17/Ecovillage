@@ -4,14 +4,19 @@
 #include <cstdlib>
 #include <algorithm>
 
+//Constructeur par defaut
 EntitySpawner::EntitySpawner() = default;
 
+// Met à jour les statistiques des entités par chunk
 void EntitySpawner::updateChunkStats(const std::vector<Entity*>& entities) {
+    // Réinitialiser les stats
     chunkStats.clear();
     
+    // Compter les entités par chunk
     for (const Entity* e : entities) {
         if (!e->isAlive) continue;
         
+        // Déterminer le chunk de l'entité
         ChunkCoord chunk(e->gridX / Chunk::SIZE, e->gridY / Chunk::SIZE);
         ChunkEntityStats& stats = chunkStats[chunk];
         
@@ -186,6 +191,14 @@ void EntitySpawner::despawnFarEntities(std::vector<Entity*>& entities, const Chu
 
         ++i;
     }
+}
+
+void EntitySpawner::despawnAllEntities(std::vector<Entity*>& entities) {
+    for (Entity* e : entities) {
+        delete e;
+    }
+    entities.clear();
+    chunkStats.clear();
 }
 
 void EntitySpawner::updateFoodOnly(float deltaTime, std::vector<Entity*>& entities, const Map& map) {

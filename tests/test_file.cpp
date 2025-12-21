@@ -83,6 +83,16 @@ int main(){
             player.shadow.setOrigin({shadowOriginX, shadowOriginY});
             std::cout << "Shadow Origin: (" << shadowOriginX << ", " << shadowOriginY << ")\n";
         }
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::R)) {
+            player.isDying = true;
+            std::cout << "You've killed the player entity for testing death animation.\n";
+        }
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::O)) {
+            player.triggerDamageFlash();
+            std::cout << "Damage flash triggered for testing.\n";
+        }
+        
+
          
         // === FIN CONTRÔLES ===
         

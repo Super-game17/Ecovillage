@@ -63,6 +63,7 @@ public:
                 const Entity* pinA = nullptr, sf::Texture* deerTexture = nullptr, sf::Texture* bearTexture = nullptr);
 
     void updateFoodOnly(float deltaTime, std::vector<Entity*>& entities, const Map& map);
+    void despawnAllEntities(std::vector<Entity*>& entities);
     
     // Getters/Setters pour les limites
     void setMaxPreyPerChunk(int max) { maxPreyPerChunk = max; }
@@ -71,12 +72,20 @@ public:
     void setMaxTotalPerChunk(int max) { maxTotalPerChunk = max; }
     void setSpawnRadius(int radius) { spawnRadius = radius; }
     void setKeepRadius(int radius) { keepRadius = radius; }
+    int getMaxPreyPerChunk() const { return maxPreyPerChunk; }
+    int getMaxPredatorPerChunk() const { return maxPredatorPerChunk; }
+    int getMaxFoodPerChunk() const { return maxFoodPerChunk; }
+    int getMaxTotalPerChunk() const { return maxTotalPerChunk; }
     
     // Setters pour les limites globales
     void setMaxTotalEntities(int max) { maxTotalEntities = max; }
     void setMaxTotalPrey(int max) { maxTotalPrey = max; }
     void setMaxTotalPredators(int max) { maxTotalPredators = max; }
     void setMaxTotalFood(int max) { maxTotalFood = max; }
+    int getMaxTotalEntities() const { return maxTotalEntities; }
+    int getMaxTotalPrey() const { return maxTotalPrey; }
+    int getMaxTotalPredators() const { return maxTotalPredators; }
+    int getMaxTotalFood() const { return maxTotalFood; }
 
     ChunkEntityStats getChunkStats(const ChunkCoord& chunk) const;
     void printStats() const;

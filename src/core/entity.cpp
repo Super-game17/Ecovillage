@@ -6,6 +6,7 @@ Entity::Entity(int startX, int startY, EntityType t, sf::Texture *texture):gridX
         shape.setSize(sf::Vector2f(20.f, 40.f));
         shape.setOrigin({10.f, 40.f});
         shape.setFillColor(sf::Color::White); // Blanc par défaut
+        originalColor = shape.getFillColor();
         shadow.setOrigin({10.f, 5.f});
         shadow.setRadius(10.f);
         }
@@ -13,6 +14,7 @@ Entity::Entity(int startX, int startY, EntityType t, sf::Texture *texture):gridX
             shape.setSize({100,100});
             shape.setTexture(texture);
             shape.setOrigin({50.f, 50.f});
+            originalColor = shape.getFillColor();
             shadow.setOrigin({40.f,-18.5f});
             shadow.setRadius(35.f);
         }
@@ -84,37 +86,119 @@ void Entity::updateVisualPosition(const Map& carte) {
         currentScreenPos = targetScreenPos;
         shape.setPosition(currentScreenPos);
         shadow.setPosition(currentScreenPos);
+}
+
+// Méthode pour déclencher l'animation de dégâts
+void Entity::triggerDamageFlash() {
+    isDamaged = true;
+    damageFlashTimer = 0.f;
+}
+
+// Animation de clignotement rouge (dégâts)
+void Entity::updateDamageAnimation(float deltaTime) {
+    if (!isDamaged) return;
+    
+    damageFlashTimer += deltaTime;
+    
+    // Fréquence de clignotement : 4 fois par seconde
+    float flashFrequency = 8.f; // Plus élevé = clignotement plus rapide
+    float phase = sin(damageFlashTimer * flashFrequency * 3.14159f);
+    
+    if (phase > 0.f) {
+        // Rouge vif pendant la phase "allumée"
+        shape.setFillColor(sf::Color(255, 50, 50, 255));
+    } else {
+        // Couleur originale pendant la phase "éteinte"
+        shape.setFillColor(originalColor);
+    }
+    
+    // Fin de l'animation
+    if (damageFlashTimer >= damageFlashDuration) {
+        isDamaged = false;
+        shape.setFillColor(originalColor); // Revenir à la normale
+    }
+}
+
+// Animation de mort
+void Entity::updateDeathAnimation(float deltaTime) {
+    if (!isDying) return;
+    
+    deathAnimTimer += deltaTime;
+    
+    // Calculer le progrès de l'animation (0.0 à 1.0)
+    float progress = deathAnimTimer / deathAnimDuration;
+    
+    if (progress >= 1.f) {
+        // Animation terminée, l'entité peut vraiment mourir
+        isAlive = false;
+        isDying = false;
+        deathAnimTimer = 0.f;
+        return;
+    }
+    
+    // EFFET 1 : Fade out (disparition progressive)
+    float alpha = 255.f * (1.f - progress);
+    sf::Color currentColor = shape.getFillColor();
+    currentColor.a = alpha;
+    shape.setFillColor(currentColor);
+    
+    // EFFET 2 : L'entité "tombe" (descend progressivement)
+    float fallOffset = progress * 30.f; // Tombe de 30 pixels
+    shape.setPosition({currentScreenPos.x, currentScreenPos.y + fallOffset});
+    
+    // EFFET 3 : Rotation (tombe sur le côté)
+    sf::Angle angle = sf::degrees(progress * 90.f); // Tourne de 90 degrés
+    shape.setRotation(angle); // Rotation de 90 degrés
+    
+    // EFFET 4 : L'ombre rétrécit
+    float shadowScale = 1.f - progress;
+    shadow.setScale({shadowScale, shadowScale * 0.5f});
+}
+
+
+void Entity::update(float deltaTime) {
+    if (moveCooldown > 0.f) moveCooldown -= deltaTime;
+    
+    // Animations de dégâts et de mort
+    updateDamageAnimation(deltaTime);
+    updateDeathAnimation(deltaTime);
+    
+    // Ne pas bouger si en train de mourir
+    if (isDying) {
+        if (isSelected) updateSelectionVisual();
+        return;
     }
 
-void Entity::update(float deltaTime){
-        if (moveCooldown > 0.f) moveCooldown -= deltaTime;
-        
-        sf::Vector2f diff = targetScreenPos - currentScreenPos;
-        float distSq = diff.x*diff.x + diff.y*diff.y;
-        
-        if (distSq > 0.5f) {
-            float t = deltaTime * speed; 
-            currentScreenPos += diff * t;
-        }
-        else
-        {
+    // Interpolation de la position pour un mouvement fluide
+    sf::Vector2f diff = targetScreenPos - currentScreenPos;
+    // Calcul de la distance au carré
+    float distSq = diff.x * diff.x + diff.y * diff.y;
+    
+    // Si la distance est significative, avancer vers la cible
+    if (distSq > 0.5f) {
+        float t = deltaTime * speed; 
+        currentScreenPos += diff * t;
+    } else {
         currentScreenPos = targetScreenPos;
-        }
-        shape.setPosition(currentScreenPos);
-        shadow.setPosition(currentScreenPos);
-        if (isSelected) {
-        updateSelectionVisual();
-        }
     }
+    
+    shape.setPosition(currentScreenPos);
+    shadow.setPosition(currentScreenPos);
+    
+    if (isSelected) {
+        updateSelectionVisual();
+    }
+}
+
 
 void Entity::draw(sf::RenderTarget& target, const Map& Carte) const{
-        if (!isAlive) return ;
+        if (!isAlive && !isDying) return ;
         sf::RenderStates states;
         states.transform.translate(Carte.chunkOrigin);
         target.draw(shadow, states);
         target.draw(shape, states);
 
-        if(isSelected){
+        if(isSelected && !isDying){
             target.draw(selectionCircle, states);
         }
     }
@@ -226,7 +310,7 @@ Prey::Prey(int x, int y, sf::Texture *texture,
            float genHealth, float genEnergy, float genSpeed, float genHungerRate, float genVisionRadius)
     : Entity(x, y, EntityType::PREY),
       maxHealth(genHealth), maxEnergy(genEnergy), 
-      maxSpeed(genSpeed), hungerRate(genHungerRate),
+      maxSpeed(genSpeed), hungerRate(genHungerRate), visionRadius(genVisionRadius),
       sprintSpeedMultiplier(1.5f), energyRecoveryRate(15.f) {
     
     health = maxHealth;
@@ -247,10 +331,6 @@ Prey::Prey(int x, int y, sf::Texture *texture,
     }
 }
 
-bool Prey::canSprint() const {
-    return energy > 20.f && health > 30.f;
-}
-
 void Prey::HandleInput(const sf::RenderWindow& window, const Map& Carte, const std::vector<Entity*>& entities) {
     Entity::HandleInput(window, Carte);
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Scancode::E)) {
@@ -258,6 +338,8 @@ void Prey::HandleInput(const sf::RenderWindow& window, const Map& Carte, const s
         if (food) {
             food->isAlive = false; // Manger la nourriture
             hunger -= 30.f; // Réduit la faim
+            health += 40.f; // Restaure un peu de santé
+            if (health > maxHealth) health = maxHealth;
             if (hunger < 0.f) hunger = 0.f;
             std::cout << "Prey at (" << gridX << ", " << gridY << ") ate food.\n";
         }
@@ -270,6 +352,8 @@ void Prey::HandleInput(const sf::RenderWindow& window, const Map& Carte, const s
         if (water.x != -1) {
             if(distManhattan(gridX, gridY, water.x, water.y) <= 1){
             thirst -= 30.f; // Réduit la soif
+            health += 20.f; // Restaure un peu de santé
+            if (health > maxHealth) health = maxHealth;
             if (thirst < 0.f) thirst = 0.f;
             std::cout << "Prey at (" << gridX << ", " << gridY << ") drank water.\n";}
         }
@@ -279,26 +363,28 @@ void Prey::HandleInput(const sf::RenderWindow& window, const Map& Carte, const s
     }
 }
 
+// Sprint plus accessible pour les proies aussi
+bool Prey::canSprint() const {
+    return energy > 12.f && health > 20.f; // Seuils plus bas
+}
+
 void Prey::sprintMove(int dx, int dy, const Map& carte) {
     if (!canSprint()) {
         move(dx, dy, carte);
         return;
     }
     
-    // Sprint coûte 2x plus cher en energy
-    energy -= 8.f; // vs 4.f pour un mouvement normal
+    energy -= 5.f; // Moins coûteux (était 8)
+    hunger += hungerRate * 1.5f; // Moins punitif (était 2)
     
-    // Consommation de faim augmente aussi en sprint
-    hunger += hungerRate * 2.f;
-    
-    // Réduit le MOVE_DELAY temporairement
     float oldDelay = MOVE_DELAY;
-    MOVE_DELAY *= 0.6f; // 60% du délai normal
+    MOVE_DELAY *= 0.6f;
     
     move(dx, dy, carte);
     
     MOVE_DELAY = oldDelay;
 }
+
 
 void Prey::recoverEnergy(float deltaTime) {
     if (energy < maxEnergy) {
@@ -309,9 +395,12 @@ void Prey::recoverEnergy(float deltaTime) {
 
 void Prey::takeDamage(float amount) {
     health -= amount;
+
+    triggerDamageFlash();
     if (health <= 0.f) {
         health = 0.f;
-        isAlive = false;
+        isDying = true;
+        std::cout << "Prey at (" << gridX << ", " << gridY << ") is dying.\n";
     }
 }
 
@@ -378,9 +467,9 @@ std::string Prey::getStats() const {
 }
 
 void Prey::update(float deltaTime)  {
-     // Appel de l'update physique (interpolation)
-        Entity::update(deltaTime);
-        if(!isAlive) return;
+    // Appel de l'update physique (interpolation)
+    Entity::update(deltaTime);
+    if(!isAlive) return;
 
     // Besoins biologiques mis à jour en continu
     hunger += hungerRate * deltaTime;
@@ -398,7 +487,7 @@ void Prey::update(float deltaTime)  {
     
     // Reproduction
     if (hunger < 30.f && thirst < 30.f && health > 60.f) {
-        reproductiveUrge += 0.5f * deltaTime;
+        reproductiveUrge += 3.f * deltaTime;
         if (reproductiveUrge > 100.f) reproductiveUrge = 100.f;
     } else {
         reproductiveUrge -= 2.f * deltaTime;
@@ -412,79 +501,86 @@ void Prey::update(float deltaTime)  {
 // Méthode principale de l'IA
 void Prey::thinkAndAct(const Map& carte, const std::vector<Entity*>& entities) {
     
-    if(moveCooldown > 0.f || !isAlive || aiTickTimer < 0.5f) return;//Il ne réfléchit que toutes les 0.5 secondes
+    if(moveCooldown > 0.f || !isAlive || aiTickTimer < 0.5f) return;
     aiTickTimer = 0;
 
-    // Trop faible pour se déplacer
-    if (energy < 5.f) {
+    if (energy < 3.f) { // Seuil plus bas
         recoverEnergy(0.5f);
         return;
     }
 
-    // 1. FUIR PRÉDATEUR (utilise sprint)
-    Entity* predator = scanForTarget(entities, EntityType::PREDATOR, visionRadius+2);
-    if (predator && energy > 30.f) {
+    // 1. FUIR PRÉDATEUR (vision augmentée pour détecter plus tôt)
+    Entity* predator = scanForTarget(entities, EntityType::PREDATOR, visionRadius + 4); // Au lieu de +2
+    if (predator && energy > 20.f) {
         int runX = gridX - (predator->gridX - gridX);
         int runY = gridY - (predator->gridY - gridY);
-        if (canSprint()) sprintMove(runX > gridX ? 1 : -1, runY > gridY ? 1 : -1, carte);
-        else moveTowards(runX, runY, carte);
+        
+        // Utiliser sprint si le prédateur est proche
+        int d = distManhattan(gridX, gridY, predator->gridX, predator->gridY);
+        if (d <= 3 && canSprint()) {
+            sprintMove(runX > gridX ? 1 : -1, runY > gridY ? 1 : -1, carte);
+        } else {
+            moveTowards(runX, runY, carte);
+        }
         return;
     }
 
     determineState();
     
-    // 2. CHERCHER PARTENAIRE POUR REPRODUCTION
-    if (canReproduce && energy > 40.f) {
-        // Chercher autre proie rassasiée à proximité
-        Entity* partner = nullptr;
-        int minDist = 9999;
-        for (auto* e : entities) {
-            if (e == this || e->type != EntityType::PREY || !e->isAlive) continue;
-            Prey* p = dynamic_cast<Prey*>(e);
-            if (p && p->canReproduce) {
-                int d = distManhattan(gridX, gridY, e->gridX, e->gridY);
-                if (d <= 10 && d < minDist) {
-                    minDist = d;
-                    partner = e;
+    // 2. REPRODUCTION (seulement si sécurisé)
+    if (canReproduce && energy > 30.f) {
+        // Vérifier qu'il n'y a pas de prédateur proche
+        Entity* nearbyPredator = scanForTarget(entities, EntityType::PREDATOR, 8);
+        if (!nearbyPredator) {
+            Entity* partner = nullptr;
+            int minDist = 9999;
+            for (auto* e : entities) {
+                if (e == this || e->type != EntityType::PREY || !e->isAlive) continue;
+                Prey* p = dynamic_cast<Prey*>(e);
+                if (p && p->canReproduce) {
+                    int d = distManhattan(gridX, gridY, e->gridX, e->gridY);
+                    if (d <= 10 && d < minDist) {
+                        minDist = d;
+                        partner = e;
+                    }
                 }
             }
-        }
-        
-        if (partner) {
-            if (distManhattan(gridX, gridY, partner->gridX, partner->gridY) <= 1) {
-                Prey* baby = reproduce(dynamic_cast<Prey*>(partner));
-                if (baby) std::cout << "Prey born at (" << baby->gridX << ", " << baby->gridY << ")\n";
-            } else {
-                moveTowards(partner->gridX, partner->gridY, carte);
+            
+            if (partner) {
+                if (distManhattan(gridX, gridY, partner->gridX, partner->gridY) <= 1) {
+                    Prey* baby = reproduce(dynamic_cast<Prey*>(partner));
+                    if (baby) std::cout << "Prey born at (" << baby->gridX << ", " << baby->gridY << ")\n";
+                } else {
+                    moveTowards(partner->gridX, partner->gridY, carte);
+                }
+                return;
             }
-            return;
         }
     }
 
     // 3. SOIF
-    if (thirst > 60.f) {
-        sf::Vector2i water = scanForWater(carte, visionRadius+4);
+    if (thirst > 55.f) { // Seuil légèrement abaissé
+        sf::Vector2i water = scanForWater(carte, visionRadius + 5);
         if (water.x != -1) {
             if (distManhattan(gridX, gridY, water.x, water.y) <= 1) {
-                thirst = 0;//Boire
-                health+=20; //On recupère un peu de santé
-                if(health>=maxHealth) health = maxHealth;
+                thirst = 0;
+                health += 20;
+                if(health >= maxHealth) health = maxHealth;
             }
             else moveTowards(water.x, water.y, carte);
             return;
         }
     }
 
-    // 4. FAIM (CHERCHER FOOD ENTITY)
-    if (hunger > 50.f) {
-        Entity* food = scanForTarget(entities, EntityType::FOOD, visionRadius+4);
+    // 4. FAIM
+    if (hunger > 45.f) { // Seuil légèrement abaissé
+        Entity* food = scanForTarget(entities, EntityType::FOOD, visionRadius + 5);
         if (food) {
-            //Si on est sur la même case que la nourriture
             if (gridX == food->gridX && gridY == food->gridY) {
-                food->isAlive = false; //NOURRITURE MANGE
-                hunger -= 40.f; //La faim diminue
-                health+=50; //On recupère de la santé
-                if(health>=maxHealth)health=maxHealth;
+                food->isAlive = false;
+                hunger -= 45.f;
+                health += 40;
+                if(health >= maxHealth) health = maxHealth;
                 if (hunger < 0.f) hunger = 0.f;
             } else {
                 moveTowards(food->gridX, food->gridY, carte);
@@ -494,7 +590,7 @@ void Prey::thinkAndAct(const Map& carte, const std::vector<Entity*>& entities) {
     }
 
     // 5. ERRER
-    if (energy > 20.f) {
+    if (energy > 12.f) {
         move((rand() % 3) - 1, (rand() % 3) - 1, carte);
     }
 }
@@ -505,7 +601,7 @@ Predator::Predator(int x, int y, sf::Texture *texture,
                    float genHealth, float genEnergy, float genSpeed, float genHungerRate, float genVisionRadius)
     : Entity(x, y, EntityType::PREDATOR),
       maxHealth(genHealth), maxEnergy(genEnergy),
-      maxSpeed(genSpeed), hungerRate(genHungerRate),
+      maxSpeed(genSpeed), hungerRate(genHungerRate), visionRadius(genVisionRadius),
       sprintSpeedMultiplier(1.6f), energyRecoveryRate(12.f) {
     
     health = maxHealth;
@@ -525,8 +621,9 @@ Predator::Predator(int x, int y, sf::Texture *texture,
     }
 }
 
+// Ajustement du sprint pour être plus accessible
 bool Predator::canSprint() const {
-    return energy > 25.f && health > 40.f;
+    return energy > 15.f && health > 25.f; // Seuils plus bas
 }
 
 void Predator::sprintMove(int dx, int dy, const Map& carte) {
@@ -535,8 +632,8 @@ void Predator::sprintMove(int dx, int dy, const Map& carte) {
         return;
     }
     
-    energy -= 10.f; // Plus cher que pour Prey
-    hunger += hungerRate * 2.5f;
+    energy -= 6.f; // Moins coûteux (était 10)
+    hunger += hungerRate * 1.5f; // Moins punitif (était 2.5)
     
     float oldDelay = MOVE_DELAY;
     MOVE_DELAY *= 0.55f;
@@ -555,9 +652,11 @@ void Predator::recoverEnergy(float deltaTime) {
 
 void Predator::takeDamage(float amount) {
     health -= amount;
+    triggerDamageFlash();
     if (health <= 0.f) {
         health = 0.f;
-        isAlive = false;
+        isDying = true;
+        std::cout << "Predator at (" << gridX << ", " << gridY << ") is dying.\n";
     }
 }
 
@@ -602,7 +701,7 @@ void Predator::applyGeneticMutation(float mutationRate) {
 void Predator::determineState() {
     if (health < 40.f) currentState = IDLE;
     else if (thirst > 80.f) currentState = SEEKING_WATER;
-    else if (hunger > 30.f) currentState = HUNTING;
+    else if (hunger > 50.f) currentState = HUNTING;
     else if (reproductiveUrge > 80.f) currentState = IDLE;
     else currentState = WANDERING;
 }
@@ -624,19 +723,21 @@ void Predator::update(float dt) {
     Entity::update(dt);
     if (!isAlive) return;
 
-    hunger += hungerRate * dt;
-    thirst += 0.4f * dt;
+    // Réduction de la consommation de faim (était trop élevée)
+    hunger += hungerRate * dt * 0.6f; // 40% moins rapide
+    thirst += 0.35f * dt; // Légèrement réduit aussi
     
     if (hunger > 95.f || thirst > 95.f) {
-        takeDamage(1.5f * dt);
+        takeDamage(1.2f * dt); // Moins punitif
     }
     
     if (moveCooldown <= 0.f) {
         recoverEnergy(dt);
     }
     
-    if (hunger < 40.f && thirst < 40.f && health > 70.f) {
-        reproductiveUrge += 4.f * dt;
+    // Reproduction uniquement si en bonne santé ET rassasié
+    if (hunger < 30.f && thirst < 30.f && health > 70.f) {
+        reproductiveUrge += 3.f * dt;
         if (reproductiveUrge > 100.f) reproductiveUrge = 100.f;
     } else {
         reproductiveUrge -= 2.f * dt;
@@ -648,22 +749,83 @@ void Predator::update(float dt) {
 }
 
 void Predator::thinkAndAct(const Map& carte, const std::vector<Entity*>& entities) {
-    if (moveCooldown > 0.f || !isAlive || aiTickTimer < 0.5f) return;
+    if (moveCooldown > 0.f || !isAlive || aiTickTimer < 0.4f) return; // Tick plus rapide
     aiTickTimer = 0;
 
-    if (energy < 10.f) {
+    // Seuil d'énergie beaucoup plus bas pour agir
+    if (energy < 3.f) {
         recoverEnergy(0.3f);
         return;
     }
 
-    // 1. REPRODUCTION
-    if (canReproduce && energy > 50.f) {
+    determineState();
+    
+    // 1. SOIF CRITIQUE (priorité absolue si > 85)
+    if (thirst > 85.f) {
+        sf::Vector2i water = scanForWater(carte, visionRadius + 6);
+        if (water.x != -1) {
+            if (distManhattan(gridX, gridY, water.x, water.y) <= 1) {
+                thirst = 0;
+                health += 15.f;
+                if (health >= maxHealth) health = maxHealth;
+            }
+            else moveTowards(water.x, water.y, carte);
+            return;
+        }
+    }
+
+    // 2. CHASSE (seuil abaissé pour commencer plus tôt)
+    if (hunger > 50.f) { // Au lieu de 30
+        Entity* prey = scanForTarget(entities, EntityType::PREY, visionRadius + 8); // Vision augmentée
+        if (Prey* p = dynamic_cast<Prey*>(prey)) {
+            int d = distManhattan(gridX, gridY, prey->gridX, prey->gridY);
+            if (d <= 1) {
+                // ATTAQUE !
+                p->takeDamage(80.f);
+                hunger -= 60.f; // Plus nourrissant
+                health += 40.f;
+                if (health >= maxHealth) health = maxHealth;
+                if (hunger < 0.f) hunger = 0.f;
+                // Message uniquement si la proie meurt vraiment
+                if (p->health <= 0.f) {
+                    std::cout << "Predator killed prey at (" << prey->gridX << ", " << prey->gridY << ")\n";
+                }
+            } else {
+                // Utiliser sprint si proche et assez d'énergie
+                int dx = prey->gridX - gridX;
+                int dy = prey->gridY - gridY;
+                if (d <= 4 && canSprint()) {
+                    sprintMove(dx > 0 ? 1 : -1, dy > 0 ? 1 : -1, carte);
+                } else {
+                    moveTowards(prey->gridX, prey->gridY, carte);
+                }
+            }
+            return;
+        }
+    }
+    
+    // 3. SOIF NORMALE
+    if (thirst > 50.f) {
+        sf::Vector2i water = scanForWater(carte, visionRadius + 6);
+        if (water.x != -1) {
+            if (distManhattan(gridX, gridY, water.x, water.y) <= 1) {
+                thirst = 0;
+                health += 15.f;
+                if (health >= maxHealth) health = maxHealth;
+            }
+            else moveTowards(water.x, water.y, carte);
+            return;
+        }
+    }
+
+    // 4. REPRODUCTION (seulement si bien nourri)
+    if (canReproduce && energy > 40.f && hunger < 30.f) {
         Entity* partner = nullptr;
         int minDist = 9999;
         for (auto* e : entities) {
             if (e == this || e->type != EntityType::PREDATOR || !e->isAlive) continue;
             Predator* p = dynamic_cast<Predator*>(e);
-            if (p && p->canReproduce) {
+            if (p && p->canReproduce && p->hunger < 30.f) { // Partenaire doit aussi être rassasié
                 int d = distManhattan(gridX, gridY, e->gridX, e->gridY);
                 if (d <= 12 && d < minDist) {
                     minDist = d;
@@ -683,45 +845,8 @@ void Predator::thinkAndAct(const Map& carte, const std::vector<Entity*>& entitie
         }
     }
 
-    determineState();
-    
-    // 2. SOIF
-    if (thirst > 80.f) {
-        sf::Vector2i water = scanForWater(carte, visionRadius+1);
-        if (water.x != -1) {
-            if (distManhattan(gridX, gridY, water.x, water.y) <= 1) {
-                thirst = 0;
-                health+=20.f;
-                if(health>=maxHealth) health = maxHealth;
-            }
-            else moveTowards(water.x, water.y, carte);
-            return;
-        }
-    }
-
-    // 3. CHASSE (avec sprint si possible)
-    if (hunger > 30.f) {
-        Entity* prey = scanForTarget(entities, EntityType::PREY, visionRadius+4);
-        if (Prey* p = dynamic_cast<Prey*> (prey)) {
-            int d = distManhattan(gridX, gridY, prey->gridX, prey->gridY);
-            if (d <= 1) {
-                p->takeDamage(50.f); // Proie prend 50 dégâts
-                hunger -= 50.f;
-                health+=50.f;
-                if(health>=maxHealth) health = maxHealth;
-                if (hunger < 0.f) hunger = 0.f;
-            } else {
-                int dx = prey->gridX - gridX;
-                int dy = prey->gridY - gridY;
-                if (canSprint()) sprintMove(dx > 0 ? 1 : -1, dy > 0 ? 1 : -1, carte);
-                else moveTowards(prey->gridX, prey->gridY, carte);
-            }
-            return;
-        }
-    }
-
-    // 4. ERRER
-    if (energy > 25.f) {
+    // 5. ERRER (consomme peu d'énergie)
+    if (energy > 15.f) {
         move((rand() % 3) - 1, (rand() % 3) - 1, carte);
     }
 }
