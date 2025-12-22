@@ -1,31 +1,25 @@
-#include<iostream>
-#include<SFML/Graphics.hpp>
+#include <iostream>
+#include "game.hpp"
+#include "SFML/Audio.hpp"
+
+// Les variables globales swidth/sheight ont été déplacées dans game.cpp
+// et sont devenues des constantes locales.
 
 int main(){
-    unsigned int width = 600;
-    unsigned int height = 360;
 
-    sf::RenderWindow* window = new sf::RenderWindow(sf::VideoMode({width,height}), "Ecovillage");
-
-    while (window->isOpen()){
-
-        while (const std::optional event = window->pollEvent()){
-
-            if (event->is<sf::Event::Closed>()){
-
-                window->close();
-            }
-            else if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()){
-
-                if(keyPressed->scancode == sf::Keyboard::Scancode::Escape){
-
-                    window->close();
-                }
-            }
-
-        }
+    sf::SoundBuffer musicbuffer;
+    if (!musicbuffer.loadFromFile("assets/sounds/music.mp3")) {
+        std::cerr << "Erreur: Impossible de charger le son music.mp3" << std::endl;
     }
-
-    delete window;
+    sf::Sound sound(musicbuffer);
+    // Initialisation du générateur de nombres aléatoires
+    // (Important de le faire ici, avant le Game constructor)
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    
+    sound.play();
+    sound.setLooping(true);
+    Game game;
+    game.run();
+    
     return 0;
 }

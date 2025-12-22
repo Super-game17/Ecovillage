@@ -52,6 +52,7 @@ public:
     // Rendu Rapide (Pour Perlin-Play - sans tri d'entités complexe)
     void renderFast(sf::RenderWindow& window, sf::Texture& texture) const;
     
+    // Méthodes pour vérifier si le bloc est un obstacle ou de l'eau
     bool isObstacle(int x, int y) const;
     bool isWater(int x, int y) const;
     

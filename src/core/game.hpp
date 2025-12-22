@@ -29,6 +29,8 @@ private:
     GameConfig config;
     EntitySpawner spawner; 
     sf::Texture textureBlocks;
+    sf::Texture deerText;
+    sf::Texture bearText;
     sf::Clock gameClock;
 
     GameState currentState = GameState::MENU;
@@ -47,7 +49,11 @@ private:
     // Widgets UI pour le jeu
     tgui::Label::Ptr statsLabel;
     tgui::Panel::Ptr perlinPanel;
+    tgui::Panel::Ptr spawnerPanel;
     bool showPerlinPanel = false;
+    bool showSpawnerPanel = false;
+
+
 
 
     // --- Fonctions de Sélection ---
@@ -62,11 +68,16 @@ private:
     void setupPerlinConfigPanel();  // Créer le panneau Perlin (mode Perlin Play uniquement)
     void applyPerlinConfig();       // Appliquer la config et recharger
     void togglePerlinPanel();       // Afficher/masquer le panneau Perlin
+    void setupSpawnerPanel();      // Créer le panneau Spawner (modes avec entités)
+    void applySpawnerConfig();      // Appliquer la config du spawner
+    void toggleSpawnerPanel();     // Afficher/masquer le panneau Spawner
     
     // --- Boucle Principale ---
     void handleEvents();
     void update(float deltaTime);
     void render();
+    // --- Fonction de Spawn Initial ---
+    void spawnInitialEntities(int preyCount, int predCount, int spawnRadius);
 };
 
 #endif // GAME_HPP

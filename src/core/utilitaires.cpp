@@ -42,6 +42,7 @@ float wave(float amplitude, float frequency, float phase, sf::Clock& clock, int 
 }
 
 sf::Vector2f isoToScreen(int x, int y, int z, int tileWidth, int tileHeight, unsigned int width, unsigned int height) {
+    // Formule de projection isometrique (top view) :
     float screenX = (width / 2.f) + (x - y) * (tileWidth / 2.f);
     // On retire la hauteur 'z' à la position y pour faire monter l'objet
     float screenY = (height / 4.f) + (x + y) * (tileHeight / 2.f) - z * tileHeight; 
@@ -51,13 +52,10 @@ sf::Vector2f isoToScreen(int x, int y, int z, int tileWidth, int tileHeight, uns
 sf::Vector2i isoToCartesian (int worldX, int worldY, int tileWidth, int tileHeight){
     // On utilise des float pour worldX/Y pour plus de précision venant de la caméra
     
-    // Pour une tuile 64x32, halfW = 32, halfH = 16.
+    // Calcul des moitiés de tile(blocks)
     float halfW = tileWidth / 2.0f;
     float halfH = tileHeight / 2.0f; // CORRECTION ICI: 2.0f au lieu de 4.0f
-
-    // Sécurité basique
-    if (halfW == 0 || halfH == 0) return sf::Vector2i(0,0);
-
+    
     // Formule inverse de l'isométrique :
     // ScreenX = (IsoX - IsoY) * halfW
     // ScreenY = (IsoX + IsoY) * halfH
@@ -93,13 +91,3 @@ float randomHash(int x, int y) {
     // Le modulo 10000 donne un entier entre 0 et 9999
     return (float)(seed % 10000) / 10000.0f;
 }
-
-// Helper pour obtenir les bounds du joueur (basé sur shape 20x40, origine {10,40})
-sf::FloatRect getPlayerBounds(sf::Vector2f playerPos) {
-    const float halfWidth = 10.0f;   // shape width = 20
-    const float height    = 40.0f;   // shape height = 40
-    float left = playerPos.x - halfWidth;
-    float top  = playerPos.y - height;
-    return sf::FloatRect({left, top}, {halfWidth * 2.0f, height});
-}
-

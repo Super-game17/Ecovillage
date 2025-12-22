@@ -9,18 +9,17 @@ using json = nlohmann::json;
 
 // Paramètres pour la génération du monde
 struct WorldConfig {
-    int seed = 1337;
-    float frequency = 0.008f;
-    int octaves = 6;
+    int seed = 1337; // Graine pour le générateur de bruit
+    float frequency = 0.008f; // Fréquence du bruit
+    int octaves = 6; // Nombre de couches de bruit
     float persistence = 0.5f; // Gain
-    float lacunarity = 2.0f;
+    float lacunarity = 2.0f; // Fréquence multiplicative
     float contrast = 3.5f;    // Puissance (pow)
-    float heightScale = 80.0f; 
+    float heightScale = 80.0f; // Échelle de hauteur maximale que peut atteindre le terrain
 };
 
 struct GameConfig {
     WorldConfig world;
-    int renderDistance = 3;
     
     // Sauvegarder
     void save(const std::string& filename = "config.json") {
@@ -34,7 +33,6 @@ struct GameConfig {
             {"contrast", world.contrast},
             {"heightScale", world.heightScale}
         };
-        j["renderDistance"] = renderDistance;
 
         std::ofstream file(filename);
         if (file.is_open()) {
@@ -64,7 +62,6 @@ struct GameConfig {
                 world.contrast = w.value("contrast", 3.5f);
                 world.heightScale = w.value("heightScale", 80.0f);
             }
-            renderDistance = j.value("renderDistance", 4);
         } catch (const std::exception& e) {
             std::cerr << "Erreur JSON: " << e.what() << std::endl;
         }

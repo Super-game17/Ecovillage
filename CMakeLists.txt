@@ -15,6 +15,12 @@ find_package(TGUI CONFIG REQUIRED)
     
 add_executable(ecovillage
     src/main.cpp
+    src/core/utilitaires.cpp
+    src/core/chunk.cpp
+    src/core/map.cpp
+    src/core/entity.cpp
+    src/core/game.cpp
+    src/core/spawner.cpp
 )
 
 # exemple: un autre exécutable pour tester un fichier séparé
@@ -26,6 +32,14 @@ add_executable(test_file
     src/core/entity.cpp
     src/core/game.cpp
     src/core/spawner.cpp
+
+)
+
+
+
+target_include_directories(ecovillage PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
 )
 
 target_include_directories(test_file PUBLIC

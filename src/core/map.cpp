@@ -136,7 +136,7 @@ void Map::update (const sf::Vector2f& cameraPos, const sf::Texture& texture){
     }
 }
 
-// VERSION OPTIMISÉE POUR PERLIN-PLAY (Ton ancien code rapide)
+// VERSION OPTIMISÉE POUR PERLIN-PLAY
 void Map::renderFast(sf::RenderWindow& window, sf::Texture& texture) const {
     sf::RenderStates states;
     states.texture = &texture;
@@ -221,7 +221,7 @@ void Map::render(sf::RenderWindow& window, sf::Texture& texture, const std::vect
 
         // Draw the layer
         // We pass localDepth directly to avoid map lookups inside drawLayer
-        item.chunk->drawLayer(window, states, item.localDepth, item.globalDepth, playerDepth, player->shape.getPosition());
+        item.chunk->drawLayer(window, states, item.localDepth, item.globalDepth, player);
         }
         if (!playerDrawn)
         {
