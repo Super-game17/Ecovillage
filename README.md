@@ -104,7 +104,7 @@ make
 
 ## 📸 Aperçu
 
-(Ajoute ici des captures d’écran ou un GIF de la génération du terrain)
+![Vue du terrain isométrique](https://github.com/Super-game17/Ecovillage/blob/main/assets/sprites/image.png?raw=true)
 
 ## 👥 Équipe
 
